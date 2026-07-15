@@ -327,6 +327,30 @@ details.card[open] > summary::before { content: '▾ '; }
 .scope-list li, .related-list li { margin: 0.5rem 0; }
 .scope-card { border-left: 4px solid var(--accent); }
 
+/* --- Hero CTA --- */
+.hero-cta-row { margin: 0.9rem 0 0; }
+.hero-cta { font-size: 0.95rem; }
+
+/* --- Guided steps (crib-drag) --- */
+.guided-steps { margin: 0 0 1rem; padding-left: 1.3rem; font-size: 0.9rem; color: var(--text-muted); }
+.guided-steps li { margin: 0.25rem 0; }
+.guided-steps strong { color: var(--text); }
+
+/* --- Orchestration + scoreboard --- */
+.orchestrate { border-left: 4px solid var(--accent); }
+.scoreboard-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; margin-top: 0.9rem; }
+.scoreboard-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scoreboard-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 640px; }
+.scoreboard-table th, .scoreboard-table td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.scoreboard-table thead th { background-color: var(--surface-alt); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.scoreboard-table tbody th { color: var(--text); font-weight: 700; }
+.scoreboard-table td { font-family: var(--mono); font-weight: 700; }
+.sc-icon { font-family: var(--sans); }
+.sc-broken { color: var(--broken-text); }
+.sc-leak { color: var(--warn-text); }
+.sc-safe { color: var(--safe-text); }
+.sc-muted { color: var(--text-muted); font-weight: 400; }
+
 /* --- Scripture footer --- */
 .scripture-footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); text-align: center; }
 .scripture-footer p { color: var(--text-muted); font-style: italic; font-size: 0.9rem; max-width: 60ch; margin: 0 auto; }

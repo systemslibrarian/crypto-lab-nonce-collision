@@ -141,13 +141,72 @@ function reused(id: string): boolean {
   return ($(id) as HTMLInputElement).checked;
 }
 
+// ── running scoreboard: the durable "what broke?" mental model ──
+type Constr = 'ctr' | 'gcm' | 'chacha' | 'cbc';
+type RunState = 'unrun' | 'safe' | 'broken';
+type Prop = 'plaintext' | 'forgery' | 'key';
+const CONSTR_LABEL: Record<Constr, string> = {
+  ctr: 'AES-CTR',
+  gcm: 'AES-GCM',
+  chacha: 'ChaCha20-Poly1305',
+  cbc: 'AES-CBC',
+};
+const PROP_LABEL: Record<Prop, string> = {
+  plaintext: 'Plaintext exposure',
+  forgery: 'Forgery possible',
+  key: 'Encryption key recovered',
+};
+const runState: Record<Constr, RunState> = { ctr: 'unrun', gcm: 'unrun', chacha: 'unrun', cbc: 'unrun' };
+
+type CellLevel = 'broken' | 'leak' | 'safe' | 'muted';
+const CELL_ICON: Record<CellLevel, string> = { broken: '✗', leak: '⚠', safe: '✓', muted: '·' };
+
+function cellFor(c: Constr, prop: Prop, state: RunState): { text: string; lvl: CellLevel } {
+  if (state === 'unrun') return { text: 'not run', lvl: 'muted' };
+  if (prop === 'key') return { text: 'No', lvl: 'safe' }; // stays No everywhere — the point
+  const noInteg = c === 'ctr' || c === 'cbc';
+  if (state === 'safe') {
+    if (prop === 'forgery') return noInteg ? { text: 'n/a', lvl: 'muted' } : { text: 'None', lvl: 'safe' };
+    return { text: 'None', lvl: 'safe' };
+  }
+  // broken (nonce reused)
+  if (prop === 'plaintext') return c === 'cbc' ? { text: 'Prefix only', lvl: 'leak' } : { text: 'Full', lvl: 'broken' };
+  return noInteg ? { text: 'n/a', lvl: 'muted' } : { text: 'Yes', lvl: 'broken' };
+}
+
+function renderScoreboard(): void {
+  const constrs: Constr[] = ['ctr', 'gcm', 'chacha', 'cbc'];
+  const props: Prop[] = ['plaintext', 'forgery', 'key'];
+  let html =
+    '<table class="scoreboard-table"><caption class="sr-only">Running summary of what each construction loses under one reused nonce</caption><thead><tr><th scope="col">Property</th>';
+  for (const c of constrs) html += `<th scope="col">${CONSTR_LABEL[c]}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const p of props) {
+    html += `<tr><th scope="row">${PROP_LABEL[p]}</th>`;
+    for (const c of constrs) {
+      const { text, lvl } = cellFor(c, p, runState[c]);
+      html += `<td class="sc-${lvl}"><span class="sc-icon" aria-hidden="true">${CELL_ICON[lvl]}</span> ${text}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  $('scoreboard').innerHTML = html;
+}
+
+function updateScore(c: Constr, isReused: boolean): void {
+  runState[c] = isReused ? 'broken' : 'safe';
+  renderScoreboard();
+}
+
 async function runCtr(): Promise<void> {
   const slot = $('out-ctr');
+  const isReused = reused('reuse-ctr');
+  updateScore('ctr', isReused);
   const key = await importCtrKey(randomBytes(32));
   const p1 = textToBytes(SCENARIO_P1);
   const p2 = textToBytes(SCENARIO_P2);
 
-  if (!reused('reuse-ctr')) {
+  if (!isReused) {
     const c1 = await aesCtrEncrypt(key, randomBytes(16), p1);
     const c2 = await aesCtrEncrypt(key, randomBytes(16), p2);
     const combo = combineCiphertexts(c1, c2);
@@ -182,10 +241,12 @@ async function runCtr(): Promise<void> {
 
 async function runGcm(): Promise<void> {
   const slot = $('out-gcm');
+  const isReused = reused('reuse-gcm');
+  updateScore('gcm', isReused);
   const rawKey = randomBytes(32);
   const key = await importGcmKey(rawKey);
 
-  if (!reused('reuse-gcm')) {
+  if (!isReused) {
     const { ciphertext, tag } = await aesGcmEncrypt(key, randomBytes(12), textToBytes(SCENARIO_P1));
     const ok = (await aesGcmVerify(key, randomBytes(12), ciphertext, tag)) !== null;
     renderResult(slot, {
@@ -220,9 +281,11 @@ async function runGcm(): Promise<void> {
 
 function runChacha(): void {
   const slot = $('out-chacha');
+  const isReused = reused('reuse-chacha');
+  updateScore('chacha', isReused);
   const key = randomBytes(32);
 
-  if (!reused('reuse-chacha')) {
+  if (!isReused) {
     const { ciphertext, tag } = chachaPolyEncrypt(key, randomBytes(12), new Uint8Array(0), textToBytes(SCENARIO_P1));
     const ok = chachaPolyVerify(key, randomBytes(12), new Uint8Array(0), ciphertext, tag) !== null;
     renderResult(slot, {
@@ -261,11 +324,13 @@ function runChacha(): void {
 
 async function runCbc(): Promise<void> {
   const slot = $('out-cbc');
+  const isReused = reused('reuse-cbc');
+  updateScore('cbc', isReused);
   const key = await importCbcKey(randomBytes(32));
   const p1 = textToBytes(CBC_P1);
   const p2 = textToBytes(CBC_P2);
 
-  if (!reused('reuse-cbc')) {
+  if (!isReused) {
     const c1 = await aesCbcEncrypt(key, randomBytes(16), p1);
     const c2 = await aesCbcEncrypt(key, randomBytes(16), p2);
     renderResult(slot, {
@@ -392,6 +457,30 @@ function setBits(bits: number, activeId: string): void {
   updateNonce();
 }
 
+// One-click orchestration: break (or spare) all four at once.
+async function runAll(reuse: boolean): Promise<void> {
+  for (const id of ['reuse-ctr', 'reuse-gcm', 'reuse-chacha', 'reuse-cbc']) {
+    ($(id) as HTMLInputElement).checked = reuse;
+  }
+  await runCtr();
+  await runGcm();
+  runChacha();
+  await runCbc();
+}
+
+// Guided helper: pick a crib that genuinely occurs in Message 1 and place it.
+function applyWorkingCrib(): void {
+  if (combined.length === 0) return;
+  const m1 = ($('cd-msg1') as HTMLTextAreaElement).value;
+  const word = m1.match(/\S+/)?.[0] ?? 'the';
+  const crib = m1.includes(word + ' ') ? word + ' ' : word;
+  const idx = Math.max(0, m1.indexOf(crib));
+  const byteOffset = enc.encode(m1.slice(0, idx)).length;
+  ($('cd-crib') as HTMLInputElement).value = crib;
+  ($('cd-offset') as HTMLInputElement).value = String(byteOffset);
+  updateCribDrag();
+}
+
 // ════════════════════════════════════════════════════════════════════════
 //  wire-up
 // ════════════════════════════════════════════════════════════════════════
@@ -399,11 +488,21 @@ function init(): void {
   $('cd-encrypt').addEventListener('click', () => void encryptForReveal());
   $('cd-crib').addEventListener('input', updateCribDrag);
   $('cd-offset').addEventListener('input', updateCribDrag);
+  $('cd-show-crib').addEventListener('click', applyWorkingCrib);
+
+  $('hero-cta').addEventListener('click', async () => {
+    document.getElementById('reveal')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await encryptForReveal();
+    applyWorkingCrib();
+  });
 
   $('run-ctr').addEventListener('click', () => void runCtr());
   $('run-gcm').addEventListener('click', () => void runGcm());
   $('run-chacha').addEventListener('click', () => runChacha());
   $('run-cbc').addEventListener('click', () => void runCbc());
+  $('run-all-reuse').addEventListener('click', () => void runAll(true));
+  $('run-all-fresh').addEventListener('click', () => void runAll(false));
+  renderScoreboard();
 
   wireCancel('cancel-gcm-btn', 'cancel-gcm-cap', 'mask ⊕ mask = 0 — what remains is (C₁ ⊕ C₂)·H², solved for H.');
   wireCancel('cancel-poly-btn', 'cancel-poly-cap', 's − s = 0 — what remains is (n₁ − n₂)·r, solved for r, then s.');

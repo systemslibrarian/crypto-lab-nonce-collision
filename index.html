@@ -139,6 +139,7 @@
           <h1 class="cl-hero-title">Nonce Collision</h1>
           <p class="cl-hero-sub">IV/nonce reuse · NIST SP 800-38A/38D · RFC 8439</p>
           <p class="cl-hero-desc">Encrypt two messages under one key and one nonce across AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC, then watch each construction break in its own way — recovering plaintext, forging tags, or leaking prefixes against the real primitives.</p>
+          <p class="hero-cta-row"><button type="button" class="primary hero-cta" id="hero-cta">Break a reused nonce now ↓</button></p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
           <span class="cl-hero-why-label">WHY IT MATTERS</span>
@@ -192,6 +193,11 @@
             <p id="cd-status" class="sr-only" role="status" aria-live="polite"></p>
 
             <div id="cd-panel" hidden>
+              <ol class="guided-steps">
+                <li><strong>Step 1 — done:</strong> both messages encrypted under one reused nonce.</li>
+                <li><strong>Step 2:</strong> type a crib you'd expect in Message 1 (or let the helper pick one).</li>
+                <li><strong>Step 3:</strong> slide it until the recovered bytes read as English — that's Message 2.</li>
+              </ol>
               <div class="lane-block">
                 <p class="output-label">C₁ ⊕ C₂ &nbsp;=&nbsp; P₁ ⊕ P₂ &nbsp;(the keystream is gone)</p>
                 <div id="cd-combined" class="byte-lane" role="region" aria-label="Combined stream P1 XOR P2, as hex bytes" tabindex="0"></div>
@@ -207,6 +213,9 @@
                   <input type="range" id="cd-offset" min="0" max="10" value="0" step="1" aria-describedby="cd-offset-val" />
                   <span id="cd-offset-val" class="offset-val" aria-live="off">offset 0</span>
                 </div>
+              </div>
+              <div class="button-row">
+                <button type="button" class="secondary" id="cd-show-crib">Show me a working crib</button>
               </div>
 
               <div class="lane-block">
@@ -226,6 +235,15 @@
 
           <div class="verdict-key" role="note" aria-label="How to read the two indicators">
             <p><strong>Two indicators, on purpose.</strong> <span class="chip neutral">Cryptographic result</span> is the raw return value of the primitive (did it decrypt? did the tag check out?). <span class="chip broken">Security verdict</span> tracks whether the system's guarantee still holds. Colour follows the verdict, not the return value — because a forgery the verifier <em>accepts</em> is the most dangerous outcome of all.</p>
+          </div>
+
+          <div class="card orchestrate">
+            <div class="button-row">
+              <button type="button" class="primary" id="run-all-reuse">Run all four — one reused nonce</button>
+              <button type="button" class="secondary" id="run-all-fresh">Run all four — fresh nonces</button>
+            </div>
+            <p class="tag-note">One click breaks (or spares) all four at once, then read the running tally below and the per-card detail underneath. This is the whole thesis in one motion: <strong>one mistake, four different failures.</strong></p>
+            <div id="scoreboard" class="scoreboard-wrap" role="region" aria-label="What broke — running summary across the four constructions" tabindex="0"></div>
           </div>
 
           <div class="outcome-grid">
@@ -410,7 +428,20 @@
           <div class="card">
             <h3>The mitigation: make reuse survivable (or impossible)</h3>
             <p>Two directions. <strong>Guarantee uniqueness</strong> — a single encryptor with a persistent counter, or the discipline SP 800-38D demands. Or use a <strong>misuse-resistant AEAD</strong> that degrades gracefully: <strong>AES-GCM-SIV</strong> (RFC 8452) derives the IV from the plaintext, so reuse leaks only whether two plaintexts were identical — no keystream collapse, no key recovery.</p>
-            <p class="tag-note">SIV is out of scope here on purpose — building it is a different lab. See <a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a>, which pits AES-GCM against AES-GCM-SIV under exactly this misuse.</p>
+            <div class="table-scroll" role="region" aria-label="Same nonce reuse: AES-GCM versus AES-GCM-SIV, described" tabindex="0">
+              <table class="consequence-table">
+                <caption class="sr-only">The same reused nonce under AES-GCM versus the misuse-resistant AES-GCM-SIV</caption>
+                <thead>
+                  <tr><th scope="col">Under one reused nonce</th><th scope="col">AES-GCM (this lab)</th><th scope="col">AES-GCM-SIV (RFC 8452)</th></tr>
+                </thead>
+                <tbody>
+                  <tr><th scope="row">Confidentiality</th><td><span class="text-broken">Keystream reuse → C₁⊕C₂ = P₁⊕P₂</span></td><td><span class="text-safe">Leaks only whether two plaintexts are identical</span></td></tr>
+                  <tr><th scope="row">Integrity</th><td><span class="text-broken">GHASH subkey H recovered → tag forgery</span></td><td><span class="text-safe">No key recovery; the tag still binds</span></td></tr>
+                  <tr><th scope="row">Cost</th><td>Single pass, online</td><td>Two passes; must buffer the full plaintext</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="tag-note"><strong>Described, not run here.</strong> The AES-GCM-SIV column is the RFC 8452 behaviour, not a live computation — this lab deliberately does not implement SIV. To break both side by side against real crypto, see <a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a>.</p>
           </div>
 
           <div class="card scope-card">

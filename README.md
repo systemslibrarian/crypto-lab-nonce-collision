@@ -21,11 +21,12 @@ A nonce ("number used once") — NIST's *initialization vector* — is a public,
 
 ## Exhibits
 
-1. **The XOR reveal (crib-drag).** Encrypt two messages under one AES-CTR key and one nonce. Because a stream cipher XORs plaintext with a keystream fixed by (key, nonce), the two ciphertexts XOR to `P₁ ⊕ P₂` — the keystream cancels. Drag a guessed run of one message across it and the other message's bytes fall out, live, against real ciphertext.
-2. **Same mistake, four outcomes.** For each construction, flip the nonce from unique to *reused*, run it, and read **two independent indicators** — the cryptographic result and the security verdict. Colour tracks the verdict, so a forgery the verifier *accepts* renders as an ALARM, never a green success.
-3. **The consequence table.** The pedagogical core: one nonce reuse, four precisely different results, and an explicit "which key (if any) is recovered" column — every answer is *No* for the encryption key.
+1. **The XOR reveal (crib-drag).** Encrypt two messages under one AES-CTR key and one nonce. Because a stream cipher XORs plaintext with a keystream fixed by (key, nonce), the two ciphertexts XOR to `P₁ ⊕ P₂` — the keystream cancels. Drag a guessed run of one message across it and the other message's bytes fall out, live, against real ciphertext. A hero "break a reused nonce now" button and a "show me a working crib" helper give the first payoff in one click.
+2. **Same mistake, four outcomes — one click.** Flip each construction from a unique to a *reused* nonce (or hit **Run all** to break/spare all four at once) and read **two independent indicators** per card — the cryptographic result and the security verdict. Colour tracks the verdict, so a forgery the verifier *accepts* renders as an ALARM, never a green success.
+3. **The "what broke?" scoreboard + consequence table.** A running tally updates as you run cards — Plaintext exposure, Forgery possible, Encryption key recovered — the last row staying *No* everywhere. The consequence table is the durable version: one nonce reuse, four precisely different results.
 4. **Why the forgeries work.** Step through the single cancellation behind both authenticated breaks: XOR two same-nonce tags and the per-nonce secret (GCM's mask; Poly1305's `s`) cancels, exposing an equation in the key you want.
 5. **Where nonces repeat.** Live birthday-bound math for random nonces (32/64/96-bit), the SP 800-38D 2³² random-IV ceiling, and the counter-rewind failure (VM snapshot / fork).
+6. **The mitigation, in-frame.** A compact AES-GCM vs AES-GCM-SIV contrast (described from RFC 8452 — SIV is deliberately *not* implemented here) closes the loop before linking to [Nonce Guard](https://systemslibrarian.github.io/crypto-lab-nonce-guard/) for the live side-by-side.
 
 ## When to Use It
 
