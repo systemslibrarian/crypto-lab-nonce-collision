@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // Apply saved theme before paint to avoid a flash. Dark default; never
+      // prefers-color-scheme (the shared bar owns the toggle + persistence).
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          document.documentElement.setAttribute('data-theme', saved || 'dark');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Interactive lab showing how reusing one nonce under one key breaks AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC — each failing differently, none gracefully."
+    />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>"
+    />
+    <title>Nonce Collision — crypto-lab</title>
+  </head>
+  <body>
+<!-- BEGIN crypto-lab shared header — managed; edit shared-header.html + re-run reapply-header.py
+     Identical on every lab. Self-contained styles. Accents use each demo's own
+     --accent CSS variable (teal #35d6bb fallback). The ONLY per-repo value is the
+     repo name (crypto-lab-nonce-collision) in the GitHub link.
+     Source of truth: github.com/systemslibrarian/crypto-lab/shared-header.html -->
+<style>
+  .cl-topbar{
+    --cl-ink: color-mix(in srgb, var(--accent, #35d6bb) 60%, #eafff8);
+    display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.7rem clamp(.9rem,3vw,2rem);
+    background:#0b1512;
+    border-bottom:1px solid color-mix(in srgb, var(--accent, #35d6bb) 22%, transparent);
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    position:sticky;top:0;z-index:1000;
+  }
+  .cl-brand{display:flex;align-items:center;gap:.8rem;text-decoration:none}
+  .cl-badge{
+    flex:0 0 auto;display:grid;place-items:center;width:40px;height:40px;
+    border:1.5px solid var(--accent, #35d6bb);border-radius:10px;
+    color:var(--cl-ink);font-weight:700;font-size:.95rem;letter-spacing:.05em;
+  }
+  .cl-brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .cl-title{color:#eafff8;font-weight:700;font-size:1.05rem;letter-spacing:.12em}
+  .cl-sub{color:#5e8b80;font-size:.72rem;letter-spacing:.04em}
+  .cl-actions{display:flex;align-items:center;gap:.5rem}
+  .cl-btn{
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.5rem .85rem;border-radius:10px;
+    border:1px solid color-mix(in srgb, var(--accent, #35d6bb) 38%, transparent);
+    background:transparent;color:var(--cl-ink);cursor:pointer;
+    font:inherit;font-size:.78rem;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;text-decoration:none;transition:background .15s,border-color .15s,color .15s;
+  }
+  .cl-btn:hover{
+    background:color-mix(in srgb, var(--accent, #35d6bb) 14%, transparent);
+    border-color:var(--accent, #35d6bb);color:#eafff8;
+  }
+  .cl-btn svg{width:15px;height:15px}
+  .cl-icon{padding:.5rem .6rem;font-size:.95rem}
+  .cl-skip-link{
+    position:absolute;left:.5rem;top:-3rem;z-index:1001;
+    padding:.55rem 1rem;border-radius:0 0 10px 10px;
+    background:#eafff8;color:#0b1512;
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    font-weight:700;font-size:.8rem;letter-spacing:.04em;text-decoration:none;
+    transition:top .15s ease;
+  }
+  .cl-skip-link:focus{top:0;outline:2px solid var(--accent,#35d6bb);outline-offset:2px;}
+  body :is(#theme-toggle,#themeToggle,.theme-toggle,.theme-toggle-btn,[data-theme-toggle]):not(#cl-theme-toggle){display:none!important}
+  @media(max-width:560px){
+    .cl-sub{display:none}
+    .cl-btn span{display:none}
+    .cl-btn svg{margin:0}
+  }
+</style>
+<a class="cl-skip-link" href="#app">Skip to content</a>
+<header class="cl-topbar" role="banner" aria-label="Crypto Lab">
+  <a class="cl-brand" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab home">
+    <span class="cl-badge">CL</span>
+    <span class="cl-brand-text">
+      <span class="cl-title">CRYPTO LAB</span>
+      <span class="cl-sub">systemslibrarian.dev</span>
+    </span>
+  </a>
+  <nav class="cl-actions" aria-label="Crypto Lab navigation">
+    <a class="cl-btn" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span>Menu</span>
+    </a>
+    <a class="cl-btn" href="https://github.com/systemslibrarian/crypto-lab-nonce-collision" target="_blank" rel="noopener" aria-label="View this project on GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7 0-.7 0-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <button class="cl-btn cl-icon" id="cl-theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle theme">☀</button>
+  </nav>
+</header>
+<script>
+  (function () {
+    var t = document.getElementById('cl-theme-toggle');
+    if (t) {
+      var cur = function(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; };
+      var paint = function(){ t.textContent = cur() === 'light' ? '☾' : '☀'; };
+      paint();
+      t.addEventListener('click', function () {
+        var next = cur() === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('theme', next); } catch (e) {}
+        paint();
+      });
+    }
+    function dedupeBanner() {
+      var bar = document.querySelector('.cl-topbar');
+      if (!bar) return;
+      document.querySelectorAll('[role="banner"]').forEach(function (el) {
+        if (el !== bar) el.setAttribute('role', 'group');
+      });
+      Array.prototype.forEach.call(document.body ? document.body.children : [], function (el) {
+        if (el.tagName === 'HEADER' && el !== bar && !el.hasAttribute('role')) el.setAttribute('role', 'group');
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dedupeBanner);
+    else dedupeBanner();
+  })();
+</script>
+<!-- END crypto-lab shared header -->
+    <div id="app">
+      <header class="cl-hero">
+        <div class="cl-hero-main">
+          <h1 class="cl-hero-title">Nonce Collision</h1>
+          <p class="cl-hero-sub">IV/nonce reuse · NIST SP 800-38A/38D · RFC 8439</p>
+          <p class="cl-hero-desc">Encrypt two messages under one key and one nonce across AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC, then watch each construction break in its own way — recovering plaintext, forging tags, or leaking prefixes against the real primitives.</p>
+        </div>
+        <aside class="cl-hero-why" aria-label="Why it matters">
+          <span class="cl-hero-why-label">WHY IT MATTERS</span>
+          <p class="cl-hero-why-text">A nonce is public and easy to get wrong — a counter that resets after a VM snapshot, a random draw that repeats. Reuse one and the damage is construction-specific and severe: sometimes the plaintext, sometimes the ability to forge. Never nothing.</p>
+        </aside>
+      </header>
+
+      <nav aria-label="Page sections">
+        <a href="#intro">What is a nonce?</a>
+        <a href="#reveal">The XOR reveal</a>
+        <a href="#outcomes">Four outcomes</a>
+        <a href="#algebra">Why forgery works</a>
+        <a href="#sources">Where nonces repeat</a>
+        <a href="#mitigations">Fixes &amp; scope</a>
+      </nav>
+
+      <main id="main" tabindex="-1">
+        <!-- ============ INTRO ============ -->
+        <section id="intro" aria-labelledby="intro-heading">
+          <h2 id="intro-heading">What is a nonce, and why does reuse matter?</h2>
+          <div class="card intro-card">
+            <p>A <strong>nonce</strong> — "number used once" — is a per-message value that a cipher mixes in so the same key can safely encrypt many messages. It is <strong>not a secret</strong>: it travels in the clear next to the ciphertext, and nobody checks it for uniqueness. NIST calls it an <strong>initialization vector (IV)</strong>; the idea is identical.</p>
+            <p>The ciphers here lean on <em>one rule</em>: never use the same nonce twice under the same key. Break that rule and the math that made them secure turns against you. What makes this lab worth your time is that the four constructions do <strong>not</strong> fail the same way — and knowing exactly how each one fails is the difference between a shrug and a catastrophe.</p>
+            <p class="tag-note">No theory required to start. Go to <a href="#reveal">The XOR reveal</a>, reuse a nonce yourself, and drag out a hidden message. Then the rest of the page explains what you just did.</p>
+          </div>
+          <div class="callout scope-note" role="note">
+            <span class="callout-label">TEACHING DEMO — NOT PRODUCTION</span>
+            <p>Every cipher operation on this page is real: AES runs in your browser's WebCrypto engine; ChaCha20 and Poly1305 are hand-rolled to the RFC 8439 test vectors so their internals are inspectable. The attacks recover real keys from real ciphertexts and are accepted by the real verifiers. It is still a teaching demo — keys live only in memory for the session, and nothing here is hardened for production use.</p>
+          </div>
+        </section>
+
+        <!-- ============ THE XOR REVEAL (core interaction) ============ -->
+        <section id="reveal" aria-labelledby="reveal-heading">
+          <h2 id="reveal-heading">The XOR reveal — recover a message you were never given</h2>
+          <p class="section-lead">This is the headline mechanism. Two messages, <strong>one AES-CTR key, one nonce</strong>. Because a stream cipher just XORs plaintext with a keystream that depends only on (key, nonce), reusing the nonce makes both messages share the <em>same</em> keystream — and XORing the two ciphertexts cancels it, leaving <code>P₁ ⊕ P₂</code> with no key involved. Drag a guessed piece of one message across it and the other message falls out. This runs against real AES-CTR ciphertext.</p>
+
+          <div class="card">
+            <div class="control-grid">
+              <div>
+                <label for="cd-msg1">Message 1 (the one you can guess at)</label>
+                <textarea id="cd-msg1" rows="2" spellcheck="false">the eagle flies at dawn — meet me by the docks</textarea>
+              </div>
+              <div>
+                <label for="cd-msg2">Message 2 (the secret you'll recover)</label>
+                <textarea id="cd-msg2" rows="2" spellcheck="false">the vault code is four seven one nine — tell no one</textarea>
+              </div>
+            </div>
+            <div class="button-row">
+              <button type="button" class="primary" id="cd-encrypt">Encrypt both under one key + one nonce</button>
+            </div>
+            <p id="cd-status" class="sr-only" role="status" aria-live="polite"></p>
+
+            <div id="cd-panel" hidden>
+              <div class="lane-block">
+                <p class="output-label">C₁ ⊕ C₂ &nbsp;=&nbsp; P₁ ⊕ P₂ &nbsp;(the keystream is gone)</p>
+                <div id="cd-combined" class="byte-lane" role="region" aria-label="Combined stream P1 XOR P2, as hex bytes" tabindex="0"></div>
+              </div>
+
+              <div class="cribdrag-controls">
+                <div class="crib-field">
+                  <label for="cd-crib">Your crib — a guessed run of Message 1</label>
+                  <input type="text" id="cd-crib" value="the " spellcheck="false" autocomplete="off" />
+                </div>
+                <div class="crib-field">
+                  <label for="cd-offset">Slide the crib (byte offset)</label>
+                  <input type="range" id="cd-offset" min="0" max="10" value="0" step="1" aria-describedby="cd-offset-val" />
+                  <span id="cd-offset-val" class="offset-val" aria-live="off">offset 0</span>
+                </div>
+              </div>
+
+              <div class="lane-block">
+                <p class="output-label">Recovered bytes of <strong>Message 2</strong> under the crib <span class="hint">(green = printable text — the crib fits here)</span></p>
+                <div id="cd-reveal-lane" class="byte-lane reveal-lane" role="region" aria-label="Recovered plaintext bytes of message 2 at the current crib position" tabindex="0"></div>
+                <p id="cd-reveal-text" class="reveal-text" role="status" aria-live="polite"></p>
+              </div>
+              <p class="tag-note">Try dragging the crib to where Message 1 actually reads <code>the&nbsp;</code> (e.g. offset 0). When your guess about Message 1 is right, the true bytes of Message 2 appear — that is crib-dragging, and it needs no key.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ FOUR OUTCOMES (per-construction consequence) ============ -->
+        <section id="outcomes" aria-labelledby="outcomes-heading">
+          <h2 id="outcomes-heading">Same mistake, four outcomes</h2>
+          <p class="section-lead">The same slip — one nonce, twice, under one key — lands differently on each construction. For each card below, flip the nonce from unique to <strong>reused</strong>, run it, and read the <strong>two separate indicators</strong>: what the cipher's own function <em>returned</em>, and the <strong>security verdict</strong>. They are not the same thing. A tag can verify as <span class="inline-valid">VALID</span> and still be a forgery — that reads as an <span class="inline-alarm">ALARM</span>, never a success.</p>
+
+          <div class="verdict-key" role="note" aria-label="How to read the two indicators">
+            <p><strong>Two indicators, on purpose.</strong> <span class="chip neutral">Cryptographic result</span> is the raw return value of the primitive (did it decrypt? did the tag check out?). <span class="chip broken">Security verdict</span> tracks whether the system's guarantee still holds. Colour follows the verdict, not the return value — because a forgery the verifier <em>accepts</em> is the most dangerous outcome of all.</p>
+          </div>
+
+          <div class="outcome-grid">
+            <!-- CTR -->
+            <article class="card outcome-card" id="card-ctr" aria-labelledby="ctr-h">
+              <h3 id="ctr-h">AES-CTR <span class="chip-spec">SP 800-38A</span></h3>
+              <p class="outcome-what">Pure stream cipher. Reuse collapses to <code>C₁ ⊕ C₂ = P₁ ⊕ P₂</code> — keystream reuse, exactly the <a href="#reveal">XOR reveal</a>. There is no integrity tag here to lose.</p>
+              <div class="reuse-row">
+                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-ctr" /><span class="slider" aria-hidden="true"></span></label>
+                <label for="reuse-ctr" class="switch-text">Reuse the nonce</label>
+                <button type="button" class="secondary run-btn" id="run-ctr">Run</button>
+              </div>
+              <div class="result-slot" id="out-ctr" role="status" aria-live="polite"></div>
+            </article>
+
+            <!-- GCM -->
+            <article class="card outcome-card" id="card-gcm" aria-labelledby="gcm-h">
+              <h3 id="gcm-h">AES-GCM <span class="chip-spec">SP 800-38D</span></h3>
+              <p class="outcome-what">Keystream reuse <em>plus</em> a worse break: two ciphertexts under one nonce let Joux's "forbidden attack" recover the <strong>GHASH authentication subkey H</strong>, enabling tag forgery. This is <strong>authentication-key recovery — not AES key recovery.</strong></p>
+              <div class="reuse-row">
+                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-gcm" /><span class="slider" aria-hidden="true"></span></label>
+                <label for="reuse-gcm" class="switch-text">Reuse the nonce</label>
+                <button type="button" class="secondary run-btn" id="run-gcm">Run</button>
+              </div>
+              <div class="result-slot" id="out-gcm" role="status" aria-live="polite"></div>
+            </article>
+
+            <!-- ChaCha20-Poly1305 -->
+            <article class="card outcome-card" id="card-chacha" aria-labelledby="cc-h">
+              <h3 id="cc-h">ChaCha20-Poly1305 <span class="chip-spec">RFC 8439</span></h3>
+              <p class="outcome-what">Keystream reuse <em>plus</em> recovery of the per-message <strong>Poly1305 one-time key (r, s)</strong>, which is fixed by (key, nonce) — enabling forgery for that nonce. The <strong>ChaCha20 key itself is not recovered.</strong></p>
+              <div class="reuse-row">
+                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-chacha" /><span class="slider" aria-hidden="true"></span></label>
+                <label for="reuse-chacha" class="switch-text">Reuse the nonce</label>
+                <button type="button" class="secondary run-btn" id="run-chacha">Run</button>
+              </div>
+              <div class="result-slot" id="out-chacha" role="status" aria-live="polite"></div>
+            </article>
+
+            <!-- CBC -->
+            <article class="card outcome-card" id="card-cbc" aria-labelledby="cbc-h">
+              <h3 id="cbc-h">AES-CBC <span class="chip-spec">SP 800-38A</span></h3>
+              <p class="outcome-what">A <em>weaker</em> failure. IV reuse makes CBC deterministic on shared prefixes: two messages with the same leading blocks produce the same leading ciphertext blocks. It leaks <strong>prefix equality</strong> — not the keystream, not the plaintext.</p>
+              <div class="reuse-row">
+                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-cbc" /><span class="slider" aria-hidden="true"></span></label>
+                <label for="reuse-cbc" class="switch-text">Reuse the IV</label>
+                <button type="button" class="secondary run-btn" id="run-cbc">Run</button>
+              </div>
+              <div class="result-slot" id="out-cbc" role="status" aria-live="polite"></div>
+            </article>
+          </div>
+
+          <div class="card table-wrapper">
+            <h3>The consequence table — precise, and precisely different</h3>
+            <div class="table-scroll" role="region" aria-label="Per-construction consequence table" tabindex="0">
+              <table class="consequence-table">
+                <caption class="sr-only">What one nonce reuse does to each construction, and which key (if any) is recovered</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Construction</th>
+                    <th scope="col">Spec</th>
+                    <th scope="col">What nonce reuse breaks</th>
+                    <th scope="col">Precise consequence</th>
+                    <th scope="col">Enc./AES key recovered?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">AES-CTR</th>
+                    <td>SP 800-38A</td>
+                    <td>Confidentiality</td>
+                    <td>Keystream reuse → <code>C₁⊕C₂ = P₁⊕P₂</code>; plaintext recovery by crib-dragging. No integrity claim to lose.</td>
+                    <td><span class="text-safe">No</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">AES-GCM</th>
+                    <td>SP 800-38D</td>
+                    <td>Confidentiality <em>and</em> integrity</td>
+                    <td>Keystream reuse, plus GHASH <strong>authentication subkey H</strong> recovery (forbidden attack) → existential forgery under that key.</td>
+                    <td><span class="text-safe">No</span> — <span class="text-broken">auth</span> key only</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">ChaCha20-Poly1305</th>
+                    <td>RFC 8439</td>
+                    <td>Confidentiality <em>and</em> integrity</td>
+                    <td>Keystream reuse, plus <strong>Poly1305 one-time key (r, s)</strong> recovery → forgery for that nonce.</td>
+                    <td><span class="text-safe">No</span> — <span class="text-broken">MAC</span> key only</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">AES-CBC</th>
+                    <td>SP 800-38A</td>
+                    <td>Confidentiality (partial)</td>
+                    <td>IV reuse leaks equality of first blocks / message prefixes. Deterministic-encryption pattern leakage, not keystream collapse.</td>
+                    <td><span class="text-safe">No</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="tag-note"><strong>The precision is the point.</strong> "Key recovery" is a phrase that hides a huge range. GCM and ChaCha20-Poly1305 leak the <em>authentication</em> key and let you forge; neither leaks the <em>encryption</em> key, so neither hands an attacker the ability to decrypt future messages under a fresh nonce. Overstating that would be a lie the math doesn't support.</p>
+          </div>
+        </section>
+
+        <!-- ============ WHY FORGERY WORKS (algebra) ============ -->
+        <section id="algebra" aria-labelledby="algebra-heading">
+          <h2 id="algebra-heading">Why the forgeries work — one cancellation, twice</h2>
+          <p class="section-lead">Both authenticated modes fall to the <em>same</em> shape of mistake: a secret pad that depends only on (key, nonce) sits inside the tag, and when the nonce repeats, XORing two tags cancels that pad and exposes a clean equation in the one unknown you want. Press each button to watch the cancellation happen — nothing here moves on its own.</p>
+
+          <details class="card">
+            <summary><h3 class="summary-h">AES-GCM: the mask cancels, leaving a polynomial in H</h3></summary>
+            <p class="gloss">The GCM tag is a keyed checksum <strong>GHASH<sub>H</sub></strong> over the ciphertext, with a per-nonce <strong>mask</strong> <code>E<sub>K</sub>(J₀)</code> XORed on top. H = E<sub>K</sub>(0¹²⁸) is fixed by the key; the mask is fixed by (key, nonce).</p>
+            <div class="cancel-viz" role="img" aria-label="Tag one equals GHASH of ciphertext one in H, XOR the mask. Tag two equals GHASH of ciphertext two in H, XOR the same mask. XORing the two tags cancels the identical masks, leaving an equation purely in H, which is solved for H.">
+              <div class="cancel-row"><span class="cancel-term">tag₁</span><span class="cancel-op">=</span><span class="cancel-term poly">GHASH<sub>H</sub>(C₁)</span><span class="cancel-op">⊕</span><span class="cancel-term shared mask">mask</span></div>
+              <div class="cancel-row"><span class="cancel-term">tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">GHASH<sub>H</sub>(C₂)</span><span class="cancel-op">⊕</span><span class="cancel-term shared mask">mask</span></div>
+              <div class="cancel-rule" aria-hidden="true"></div>
+              <div class="cancel-row result-row"><span class="cancel-term">tag₁ ⊕ tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">(C₁ ⊕ C₂)·H²</span><span class="cancel-op cancel-fadeable">⊕</span><span class="cancel-term shared mask cancel-fadeable">mask ⊕ mask</span><span class="cancel-gone" aria-hidden="true">= 0</span></div>
+            </div>
+            <div class="cancel-controls">
+              <button type="button" class="secondary cancel-btn" id="cancel-gcm-btn" aria-describedby="cancel-gcm-cap">Cancel the shared mask ▶</button>
+              <p id="cancel-gcm-cap" class="cancel-caption" role="status" aria-live="polite">The same mask sits in both tags.</p>
+            </div>
+            <p>For two equal-length single blocks this collapses to <code>tag₁ ⊕ tag₂ = (C₁ ⊕ C₂)·H²</code>, solved directly as <code>H = √((tag₁⊕tag₂)·(C₁⊕C₂)⁻¹)</code> over GF(2¹²⁸). Recover H and the mask, and you can forge a tag for any ciphertext under that nonce. This is exactly what the GCM card runs — the recovered H is checked byte-for-byte against the true <code>E<sub>K</sub>(0¹²⁸)</code>, and the forged blob is handed to WebCrypto's own verifier.</p>
+          </details>
+
+          <details class="card">
+            <summary><h3 class="summary-h">ChaCha20-Poly1305: the one-time key is reused, so (r, s) leaks</h3></summary>
+            <p class="gloss"><strong>Poly1305</strong> is a one-time authenticator: for a key (r, s) the tag is <code>(poly<sub>r</sub>(msg) + s) mod 2¹²⁸</code>. "One-time" means (r, s) may authenticate <em>exactly one</em> message. In the AEAD, (r, s) is <code>ChaCha20(key, nonce, 0)[0:32]</code> — fixed by (key, nonce).</p>
+            <div class="cancel-viz" role="img" aria-label="Tag one equals n1 times r plus s. Tag two equals n2 times r plus s. Subtracting the two tags cancels s, leaving a linear equation n1 minus n2 times r, which is solved for r; then s follows.">
+              <div class="cancel-row"><span class="cancel-term">tag₁</span><span class="cancel-op">=</span><span class="cancel-term poly">n₁·r</span><span class="cancel-op">+</span><span class="cancel-term shared mask">s</span></div>
+              <div class="cancel-row"><span class="cancel-term">tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">n₂·r</span><span class="cancel-op">+</span><span class="cancel-term shared mask">s</span></div>
+              <div class="cancel-rule" aria-hidden="true"></div>
+              <div class="cancel-row result-row"><span class="cancel-term">tag₁ − tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">(n₁ − n₂)·r</span><span class="cancel-op cancel-fadeable">+</span><span class="cancel-term shared mask cancel-fadeable">s − s</span><span class="cancel-gone" aria-hidden="true">= 0</span></div>
+            </div>
+            <div class="cancel-controls">
+              <button type="button" class="secondary cancel-btn" id="cancel-poly-btn" aria-describedby="cancel-poly-cap">Cancel the shared s ▶</button>
+              <p id="cancel-poly-cap" class="cancel-caption" role="status" aria-live="polite">The same s sits in both tags.</p>
+            </div>
+            <p>With <code>s</code> gone, a linear (single-block) relation in <code>r</code> remains over the field GF(2¹³⁰−5); invert <code>(n₁−n₂)</code>, resolve the small carry from the final <code>mod 2¹²⁸</code>, and <code>r</code> — then <code>s</code> — fall out. The ChaCha card recovers (r, s) from public tags only, checks them against the true one-time key, and the real Poly1305 verifier accepts the forged tag. The <strong>ChaCha20 encryption key never appears in any of this.</strong></p>
+          </details>
+        </section>
+
+        <!-- ============ WHERE NONCES REPEAT ============ -->
+        <section id="sources" aria-labelledby="sources-heading">
+          <h2 id="sources-heading">Where a nonce actually repeats</h2>
+          <p class="section-lead">Reuse is not exotic. It comes from two ordinary places: random nonces colliding by the birthday bound, and counters that silently rewind.</p>
+
+          <div class="card">
+            <h3>Random 96-bit nonces and the birthday bound</h3>
+            <p>Pick nonces at random from a 2<sup>bits</sup> space and a collision becomes likely far sooner than intuition says — around <code>√(2·2<sup>bits</sup>)</code> draws, not <code>2<sup>bits</sup></code>. Slide the message count and watch the probability of <em>at least one</em> repeat climb (computed live from the exact birthday formula).</p>
+            <div class="nonce-controls">
+              <div class="crib-field">
+                <span class="field-label" id="nonce-bits-label">Nonce size</span>
+                <div class="radio-row" role="radiogroup" aria-labelledby="nonce-bits-label">
+                  <button type="button" class="chip-toggle" id="bits-32" role="radio" aria-checked="false">32-bit</button>
+                  <button type="button" class="chip-toggle" id="bits-64" role="radio" aria-checked="false">64-bit</button>
+                  <button type="button" class="chip-toggle is-active" id="bits-96" role="radio" aria-checked="true">96-bit (GCM)</button>
+                </div>
+              </div>
+              <div class="crib-field">
+                <label for="nonce-count">Messages encrypted (log scale)</label>
+                <input type="range" id="nonce-count" min="0" max="72" value="40" step="1" aria-describedby="nonce-count-val" />
+                <span id="nonce-count-val" class="offset-val">2⁴⁰ messages</span>
+              </div>
+            </div>
+            <div class="nonce-readout" role="status" aria-live="polite">
+              <div class="readout-cell"><span class="readout-label">Collision probability</span><span class="readout-val" id="nonce-prob">—</span></div>
+              <div class="readout-cell"><span class="readout-label">50% chance at about</span><span class="readout-val" id="nonce-5050">—</span></div>
+            </div>
+            <p class="tag-note">This is why SP 800-38D limits a single key to <strong>2³² invocations</strong> when 96-bit IVs are generated randomly: past that, the birthday probability of an IV collision — and the total break you just saw — stops being negligible.</p>
+          </div>
+
+          <div class="card">
+            <h3>Counters that rewind</h3>
+            <p>A monotonic counter never repeats — until the machine does. Restore a <strong>VM snapshot</strong>, fork a process, or roll back a container and the counter resumes from an old value, re-emitting nonces already used under the same long-lived key. The counter looks perfect; the environment betrayed it.</p>
+            <p class="tag-note">The deeper question — how randomness and state themselves collapse — is its own subject. See the <strong>Entropy Collapse</strong> lab in the <a href="https://crypto-lab.systemslibrarian.dev/">Crypto Lab catalog</a>. This lab stops at the nonce and what breaks downstream of it.</p>
+          </div>
+        </section>
+
+        <!-- ============ MITIGATIONS & SCOPE ============ -->
+        <section id="mitigations" aria-labelledby="mitigations-heading">
+          <h2 id="mitigations-heading">Fixes, and what this lab is not</h2>
+
+          <div class="card">
+            <h3>The mitigation: make reuse survivable (or impossible)</h3>
+            <p>Two directions. <strong>Guarantee uniqueness</strong> — a single encryptor with a persistent counter, or the discipline SP 800-38D demands. Or use a <strong>misuse-resistant AEAD</strong> that degrades gracefully: <strong>AES-GCM-SIV</strong> (RFC 8452) derives the IV from the plaintext, so reuse leaks only whether two plaintexts were identical — no keystream collapse, no key recovery.</p>
+            <p class="tag-note">SIV is out of scope here on purpose — building it is a different lab. See <a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a>, which pits AES-GCM against AES-GCM-SIV under exactly this misuse.</p>
+          </div>
+
+          <div class="card scope-card">
+            <h3>Honest scope — what this is not</h3>
+            <ul class="scope-list">
+              <li><strong>No AES key recovery, anywhere.</strong> The GCM and ChaCha20-Poly1305 breaks recover <em>authentication</em> keys and enable forgery. The AES/ChaCha encryption key is never learned. The whole lab is built around that distinction.</li>
+              <li><strong>Not a misuse-resistant-AEAD build.</strong> AES-GCM-SIV is named as the fix and linked, not implemented here — see <a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a>.</li>
+              <li><strong>Not an entropy-source lab.</strong> How randomness and counters fail upstream is <strong>Entropy Collapse</strong>, in the <a href="https://crypto-lab.systemslibrarian.dev/">catalog</a>.</li>
+              <li><strong>No CBC padding oracle.</strong> CBC here leaks prefix equality only; the padding-oracle decryption attack is <a href="https://systemslibrarian.github.io/crypto-lab-padding-oracle/">Padding Oracle</a>.</li>
+              <li><strong>What it does not prove:</strong> that these ciphers are weak. Used correctly — a unique nonce per message under each key — every one is secure. This lab proves only that the nonce rule is load-bearing, and that violating it fails in construction-specific, non-graceful ways.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>Related demos</h3>
+            <ul class="related-list">
+              <li><a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a> — AES-GCM vs AES-GCM-SIV under nonce misuse (the mitigation).</li>
+              <li><a href="https://systemslibrarian.github.io/crypto-lab-chacha20-stream/">ChaCha20 Stream</a> — the keystream on its own.</li>
+              <li><a href="https://systemslibrarian.github.io/crypto-lab-aes-modes/">AES Modes</a> — CTR, CBC, and friends side by side.</li>
+              <li><a href="https://systemslibrarian.github.io/crypto-lab-padding-oracle/">Padding Oracle</a> — the CBC integrity failure this lab deliberately skips.</li>
+              <li><a href="https://systemslibrarian.github.io/crypto-lab-mac-race/">MAC Race</a> — how message authentication is supposed to work.</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <footer class="scripture-footer">
+        <p>So whether you eat or drink or whatever you do, do it all for the glory of God. — 1 Corinthians 10:31</p>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
