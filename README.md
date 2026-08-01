@@ -84,7 +84,7 @@ npm run test:a11y  # axe-core WCAG gate against the built site (needs: npx playw
 | Poly1305 key generation | RFC 8439 §2.6.2 | `src/crypto/poly1305.test.ts` |
 | ChaCha20-Poly1305 AEAD | RFC 8439 §2.8.2 | `src/crypto/aead.test.ts` |
 | GHASH field math | cross-checked vs an independent GHASH reference | `src/crypto/gf128.test.ts` |
-| AES-256 `E_K(0¹²⁸)` | FIPS-197 all-zero-key vector | `src/crypto/aes.test.ts` |
+| AES-256 `E_K(0¹²⁸)` (GHASH subkey `H`) | GCM spec (McGrew & Viega) Appendix B, Test Case 13 | `src/crypto/aes.test.ts` |
 
 Beyond the KATs, the suite proves the attacks are real: the forbidden attack recovers `H` byte-for-byte over random keys and the forged blob is accepted by **WebCrypto's own** AES-GCM verifier; the Poly1305 recovery reproduces the true `(r, s)` and the forged tag is accepted by the real verifier; unique nonces provably do **not** recover either key.
 

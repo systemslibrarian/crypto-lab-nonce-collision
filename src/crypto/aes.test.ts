@@ -60,10 +60,13 @@ describe('AES-CBC IV reuse leaks shared prefixes (SP 800-38A)', () => {
   });
 });
 
-describe('GHASH subkey via CTR-zero equals a known AES-256 test vector', () => {
-  it('E_K(0¹²⁸) for the all-zero key matches the NIST AES-256 vector', async () => {
-    // FIPS-197 / NIST AES-256 ECB: AES-256(key=0³², block=0¹⁶) =
-    // dc95c078a2408989ad48a21492842087
+describe('GHASH subkey via CTR-zero equals the GCM spec AES-256 test vector', () => {
+  it('E_K(0¹²⁸) for the all-zero key matches the published GCM test vector', async () => {
+    // GCM spec (McGrew & Viega, "The Galois/Counter Mode of Operation (GCM)"),
+    // Appendix B, Test Case 13: K = 0³², so the GHASH subkey is
+    // H = AES-256(key=0³², block=0¹⁶) = dc95c078a2408989ad48a21492842087.
+    // Not a FIPS 197 vector — FIPS 197 Appendix C.3's AES-256 example uses
+    // key 000102…1e1f with plaintext 00112233…eeff.
     const H = await ghashSubkeyH(new Uint8Array(32));
     expect(hex(H)).toBe('dc95c078a2408989ad48a21492842087');
   });
