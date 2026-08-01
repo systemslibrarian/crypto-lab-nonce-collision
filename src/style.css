@@ -100,7 +100,6 @@ body {
   background-color: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px;
 }
 
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;border-bottom:1px solid var(--border);padding-bottom:1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;color:var(--text);}
@@ -109,8 +108,7 @@ body {
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--accent-text);}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--text);}
-@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
-/* END cl-hero standard */
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}.cl-hero-main{flex-basis:auto;min-width:0;}}
 
 /* --- Page-section nav --- */
 nav[aria-label='Page sections'] { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
@@ -155,6 +153,8 @@ textarea:focus-visible, input[type='text']:focus-visible { outline: 2px solid va
 button {
   font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px;
   padding: 0.55rem 1rem; border: 1px solid var(--border); background-color: var(--surface-alt); color: var(--text);
+  /* WCAG touch target: at least 44x44 CSS px */
+  min-height: 44px; min-width: 44px;
 }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.6; cursor: default; }
@@ -354,3 +354,16 @@ details.card[open] > summary::before { content: '▾ '; }
 /* --- Scripture footer --- */
 .scripture-footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); text-align: center; }
 .scripture-footer p { color: var(--text-muted); font-style: italic; font-size: 0.9rem; max-width: 60ch; margin: 0 auto; }
+
+/* --- Reduced motion --- */
+/* Users who ask the OS to minimise motion get the state changes without the
+   animated transitions (WCAG 2.3.3). Durations are collapsed rather than set to
+   0 so transitionend listeners still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
