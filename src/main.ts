@@ -20,6 +20,7 @@ import {
   chachaPolyVerify,
   runOneTimeKeyRecovery,
 } from './crypto/aead.ts';
+import { gcmCancellation, polyCancellation } from './crypto/cancellation.ts';
 import {
   collisionProbability,
   countForProbability,
@@ -397,21 +398,111 @@ function hashStr(s: string): number {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-//  3. ALGEBRA — action-triggered cancellation (no idle motion)
+//  3. ALGEBRA — the cancellation, recomputed from a real run
 // ════════════════════════════════════════════════════════════════════════
-function wireCancel(btnId: string, capId: string, doneText: string): void {
-  const btn = $(btnId) as HTMLButtonElement;
-  const cap = $(capId);
+// The symbolic rows above each button show the SHAPE. The panel these handlers
+// fill in shows the shape holding on bytes produced a moment ago: two probes
+// encrypted/MACed under a fresh random key and one reused nonce, the shared pad
+// re-derived from each tag independently, and the resulting identity checked by
+// comparison. Every press generates new keys, so the numbers change.
+
+function hexc(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hexBig(v: bigint, digits = 32): string {
+  return v.toString(16).padStart(digits, '0');
+}
+
+function runRow(label: string, value: string): string {
+  return `<div class="cr-row"><span class="cr-key">${escapeHTML(label)}</span><span class="cr-val">${escapeHTML(value)}</span></div>`;
+}
+
+function checkRow(ok: boolean, text: string): string {
+  return `<p class="cancel-check ${ok ? 'cc-ok' : 'cc-bad'}"><span class="cc-icon" aria-hidden="true">${ok ? '✓' : '✗'}</span>${escapeHTML(text)}</p>`;
+}
+
+function playCancelAnimation(btn: HTMLButtonElement): void {
   const viz = btn.closest('details')?.querySelector('.cancel-viz') ?? null;
-  btn.addEventListener('click', () => {
-    if (!viz) return;
-    viz.classList.add('cancelled');
-    viz.querySelectorAll('.cancel-fadeable').forEach((el) => el.classList.add('faded'));
-    viz.querySelectorAll('.cancel-gone').forEach((el) => el.classList.add('show'));
-    cap.textContent = doneText;
-    btn.disabled = true;
-    btn.textContent = 'Cancelled ✓';
-  });
+  if (!viz) return;
+  viz.classList.add('cancelled');
+  viz.querySelectorAll('.cancel-fadeable').forEach((el) => el.classList.add('faded'));
+  viz.querySelectorAll('.cancel-gone').forEach((el) => el.classList.add('show'));
+}
+
+async function runGcmCancellation(): Promise<void> {
+  const btn = $('cancel-gcm-btn') as HTMLButtonElement;
+  const cap = $('cancel-gcm-cap');
+  const out = $('cancel-gcm-run');
+
+  // A fresh key and ONE nonce, used twice — the mistake, performed.
+  const rawKey = randomBytes(32);
+  const res = await runForbiddenAttack(rawKey, randomBytes(12));
+  const c = gcmCancellation(res.ct1, res.tag1, res.ct2, res.tag2, res.recoveredH);
+
+  playCancelAnimation(btn);
+  out.hidden = false;
+  out.innerHTML = `
+    <p class="cancel-run-title">This run’s bytes — every value below was just computed</p>
+    <div class="cancel-run-grid" role="group" aria-label="AES-GCM cancellation, computed from this run">
+      ${runRow('tag₁', hexc(c.tag1))}
+      ${runRow('tag₂', hexc(c.tag2))}
+      ${runRow('mask from tag₁: tag₁ ⊕ GHASH_H(C₁)', hexc(c.maskFrom1))}
+      ${runRow('mask from tag₂: tag₂ ⊕ GHASH_H(C₂)', hexc(c.maskFrom2))}
+      ${runRow('tag₁ ⊕ tag₂', hexc(c.tagXor))}
+      ${runRow('C₁ ⊕ C₂', hexc(c.ctXor))}
+      ${runRow('recovered H', hexc(c.H))}
+      ${runRow('H² in GF(2¹²⁸)', hexc(c.hSquared))}
+      ${runRow('(C₁ ⊕ C₂)·H² recomputed', hexc(c.rhs))}
+    </div>
+    ${checkRow(c.masksIdentical, 'The two masks, derived from each tag separately, are byte-identical — so XORing the tags removes them.')}
+    ${checkRow(c.equationHolds, 'tag₁ ⊕ tag₂ equals (C₁ ⊕ C₂)·H² recomputed from the recovered H. That is the cancellation, on these bytes.')}
+    ${checkRow(res.recovered, 'The recovered H matches the true E_K(0¹²⁸) byte for byte — the attacker never saw the AES key.')}`;
+  cap.textContent = c.masksIdentical && c.equationHolds
+    ? 'mask ⊕ mask = 0 — verified on this run: the remaining equation is (C₁ ⊕ C₂)·H², solved for H.'
+    : 'Unexpected: the identity did not hold for this run. Please report it.';
+  btn.textContent = 'Run it again with new keys ▶';
+}
+
+function runPolyCancellation(): void {
+  const btn = $('cancel-poly-btn') as HTMLButtonElement;
+  const cap = $('cancel-poly-cap');
+  const out = $('cancel-poly-run');
+
+  const res = runOneTimeKeyRecovery(randomBytes(32), randomBytes(12));
+  const c = polyCancellation(
+    res.probes[0],
+    res.tags[0],
+    res.probes[1],
+    res.tags[1],
+    res.recoveredR,
+    res.recoveredS,
+  );
+
+  playCancelAnimation(btn);
+  out.hidden = false;
+  out.innerHTML = `
+    <p class="cancel-run-title">This run’s numbers — every value below was just computed</p>
+    <div class="cancel-run-grid" role="group" aria-label="Poly1305 cancellation, computed from this run">
+      ${runRow('tag₁', hexBig(c.tag1))}
+      ${runRow('tag₂', hexBig(c.tag2))}
+      ${runRow('polyval₁ = n₁·r mod 2¹³⁰−5', hexBig(c.polyval1, 33))}
+      ${runRow('polyval₂ = n₂·r mod 2¹³⁰−5', hexBig(c.polyval2, 33))}
+      ${runRow('s from tag₁: (tag₁ − polyval₁) mod 2¹²⁸', hexBig(c.sFrom1))}
+      ${runRow('s from tag₂: (tag₂ − polyval₂) mod 2¹²⁸', hexBig(c.sFrom2))}
+      ${runRow('tag₁ − tag₂ mod 2¹²⁸', hexBig(c.tagDiff))}
+      ${runRow('polyval₁ − polyval₂ mod 2¹²⁸', hexBig(c.polyDiff))}
+      ${runRow('recovered r (clamped)', hexBig(c.r))}
+    </div>
+    ${checkRow(c.sIdentical, 'The s derived from each tag separately is the same number — so subtracting the tags removes it.')}
+    ${checkRow(c.equationHolds, 'tag₁ − tag₂ equals polyval₁ − polyval₂ (mod 2¹²⁸): what is left depends only on r.')}
+    ${checkRow(c.rClampValid && res.recovered, 'The recovered r satisfies the RFC 8439 clamp and (r, s) matches the true one-time key — the ChaCha20 key was never touched.')}`;
+  cap.textContent = c.sIdentical && c.equationHolds
+    ? 's − s = 0 — verified on this run: the remaining relation is (n₁ − n₂)·r, solved for r, then s.'
+    : 'Unexpected: the identity did not hold for this run. Please report it.';
+  btn.textContent = 'Run it again with new keys ▶';
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -504,8 +595,8 @@ function init(): void {
   $('run-all-fresh').addEventListener('click', () => void runAll(false));
   renderScoreboard();
 
-  wireCancel('cancel-gcm-btn', 'cancel-gcm-cap', 'mask ⊕ mask = 0 — what remains is (C₁ ⊕ C₂)·H², solved for H.');
-  wireCancel('cancel-poly-btn', 'cancel-poly-cap', 's − s = 0 — what remains is (n₁ − n₂)·r, solved for r, then s.');
+  $('cancel-gcm-btn').addEventListener('click', () => void runGcmCancellation());
+  $('cancel-poly-btn').addEventListener('click', () => runPolyCancellation());
 
   $('bits-32').addEventListener('click', () => setBits(32, 'bits-32'));
   $('bits-64').addEventListener('click', () => setBits(64, 'bits-64'));

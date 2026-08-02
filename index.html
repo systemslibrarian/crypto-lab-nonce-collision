@@ -373,9 +373,10 @@
               <div class="cancel-row result-row"><span class="cancel-term">tag₁ ⊕ tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">(C₁ ⊕ C₂)·H²</span><span class="cancel-op cancel-fadeable">⊕</span><span class="cancel-term shared mask cancel-fadeable">mask ⊕ mask</span><span class="cancel-gone" aria-hidden="true">= 0</span></div>
             </div>
             <div class="cancel-controls">
-              <button type="button" class="secondary cancel-btn" id="cancel-gcm-btn" aria-describedby="cancel-gcm-cap">Cancel the shared mask ▶</button>
-              <p id="cancel-gcm-cap" class="cancel-caption" role="status" aria-live="polite">The same mask sits in both tags.</p>
+              <button type="button" class="secondary cancel-btn" id="cancel-gcm-btn" aria-describedby="cancel-gcm-cap">Run it on real bytes and cancel ▶</button>
+              <p id="cancel-gcm-cap" class="cancel-caption" role="status" aria-live="polite">The same mask sits in both tags. Press to encrypt two probes under a fresh key and one reused nonce, then re-derive the mask from each tag.</p>
             </div>
+            <div class="cancel-run" id="cancel-gcm-run" hidden></div>
             <p>For two equal-length single blocks this collapses to <code>tag₁ ⊕ tag₂ = (C₁ ⊕ C₂)·H²</code>, solved directly as <code>H = √((tag₁⊕tag₂)·(C₁⊕C₂)⁻¹)</code> over GF(2¹²⁸). Recover H and the mask, and you can forge a tag for any ciphertext under that nonce. This is exactly what the GCM card runs — the recovered H is checked byte-for-byte against the true <code>E<sub>K</sub>(0¹²⁸)</code>, and the forged blob is handed to WebCrypto's own verifier.</p>
           </details>
 
@@ -389,9 +390,10 @@
               <div class="cancel-row result-row"><span class="cancel-term">tag₁ − tag₂</span><span class="cancel-op">=</span><span class="cancel-term poly">(n₁ − n₂)·r</span><span class="cancel-op cancel-fadeable">+</span><span class="cancel-term shared mask cancel-fadeable">s − s</span><span class="cancel-gone" aria-hidden="true">= 0</span></div>
             </div>
             <div class="cancel-controls">
-              <button type="button" class="secondary cancel-btn" id="cancel-poly-btn" aria-describedby="cancel-poly-cap">Cancel the shared s ▶</button>
-              <p id="cancel-poly-cap" class="cancel-caption" role="status" aria-live="polite">The same s sits in both tags.</p>
+              <button type="button" class="secondary cancel-btn" id="cancel-poly-btn" aria-describedby="cancel-poly-cap">Run it on real numbers and cancel ▶</button>
+              <p id="cancel-poly-cap" class="cancel-caption" role="status" aria-live="polite">The same s sits in both tags. Press to MAC two probes under a fresh key and one reused nonce, then re-derive s from each tag.</p>
             </div>
+            <div class="cancel-run" id="cancel-poly-run" hidden></div>
             <p>With <code>s</code> gone, a linear (single-block) relation in <code>r</code> remains over the field GF(2¹³⁰−5); invert <code>(n₁−n₂)</code>, resolve the small carry from the final <code>mod 2¹²⁸</code>, and <code>r</code> — then <code>s</code> — fall out. The ChaCha card recovers (r, s) from public tags only, checks them against the true one-time key, and the real Poly1305 verifier accepts the forged tag. The <strong>ChaCha20 encryption key never appears in any of this.</strong></p>
           </details>
         </section>

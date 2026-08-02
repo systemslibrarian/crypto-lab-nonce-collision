@@ -308,6 +308,22 @@ details.card[open] > summary::before { content: '▾ '; }
 .cancel-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; }
 .cancel-caption { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
 
+/* --- Computed cancellation panel ---
+   The symbolic rows above show the shape; this block shows the shape holding on
+   bytes the page produced a moment ago. Colours here are the existing verdict
+   tokens, which are AA in both themes. */
+.cancel-run { margin-top: 0.9rem; border: 1px solid var(--border); border-radius: 10px; background-color: var(--surface-alt); padding: 0.85rem 1rem; }
+.cancel-run-title { margin: 0 0 0.6rem; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.cancel-run-grid { display: grid; gap: 0.3rem; }
+.cr-row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 0.3rem 0.9rem; align-items: baseline; }
+@media (max-width: 720px) { .cr-row { grid-template-columns: 1fr; } }
+.cr-key { font-size: 0.82rem; color: var(--text); }
+.cr-val { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
+.cancel-check { margin: 0.55rem 0 0; font-size: 0.86rem; display: flex; gap: 0.45rem; align-items: baseline; }
+.cc-icon { font-weight: 700; }
+.cc-ok { color: var(--safe-text); }
+.cc-bad { color: var(--broken-text); }
+
 /* --- Nonce panel --- */
 .nonce-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin: 1rem 0; }
 @media (max-width: 640px) { .nonce-controls { grid-template-columns: 1fr; } }

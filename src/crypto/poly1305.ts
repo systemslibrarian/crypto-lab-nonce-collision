@@ -15,6 +15,9 @@
  */
 
 const P = (1n << 130n) - 5n;
+/** The Poly1305 prime 2¹³⁰−5, exported so the cancellation panel can recompute
+ *  polyval on this run's numbers rather than assert the identity. */
+export const POLY_P = P;
 /** The RFC 8439 clamp: r &= 0x0ffffffc0ffffffc0ffffffc0fffffff. */
 export const CLAMP = 0x0ffffffc0ffffffc0ffffffc0fffffffn;
 
@@ -42,7 +45,7 @@ export function splitKey(oneTimeKey: Uint8Array): { r: bigint; s: bigint } {
 }
 
 /** The block value n_i = int(block ‖ 0x01) little-endian (RFC 8439 §2.5.1). */
-function blockValue(block: Uint8Array): bigint {
+export function blockValue(block: Uint8Array): bigint {
   return leToBig(block) + (1n << BigInt(8 * block.length));
 }
 

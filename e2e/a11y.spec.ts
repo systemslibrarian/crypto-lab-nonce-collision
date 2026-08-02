@@ -33,10 +33,13 @@ async function prepare(page: Page): Promise<void> {
   for (const b of await page.locator('.run-btn').all()) {
     await b.click().catch(() => {});
   }
-  // Complete the cancellation animations.
+  // Run both cancellations so the computed byte panels are on the page to scan
+  // (they are the algebra section's real output, not decoration).
   for (const b of await page.locator('.cancel-btn').all()) {
     await b.click().catch(() => {});
   }
+  await expect(page.locator('#cancel-gcm-run .cr-row').first()).toBeVisible();
+  await expect(page.locator('#cancel-poly-run .cr-row').first()).toBeVisible();
   await page.waitForTimeout(500);
 }
 
