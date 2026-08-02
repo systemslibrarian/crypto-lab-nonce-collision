@@ -19,6 +19,7 @@
   --text-muted: #9aa3b2;
   --text-dim: #9aa3b2;
   --border: #2e3140;
+  --control-border: #707486;
   --code-bg: #1e2029;
   /* Red is dark; on-surface accent text needs a lifted variant for AA. */
   --accent-text: #f87171;
@@ -43,6 +44,7 @@
   --text-muted: #4b5563;
   --text-dim: #4b5563;
   --border: #d1d5db;
+  --control-border: #68727e;
   --code-bg: #e8eaed;
   --accent-text: #b91c1c;
   --on-accent: #ffffff;
@@ -145,7 +147,7 @@ h3 { font-size: 1.1rem; margin: 0 0 0.6rem; color: var(--text); }
 label, .field-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text); }
 textarea, input[type='text'] {
   width: 100%; font-family: var(--mono); font-size: 0.9rem; padding: 0.55rem 0.7rem;
-  background-color: var(--surface-alt); color: var(--text); border: 1px solid var(--border); border-radius: 8px; resize: vertical;
+  background-color: var(--surface-alt); color: var(--text); border: 1px solid var(--control-border); border-radius: 8px; resize: vertical;
 }
 textarea:focus-visible, input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 .button-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
