@@ -264,7 +264,7 @@
               <h3 id="ctr-h">AES-CTR <span class="chip-spec">SP 800-38A</span></h3>
               <p class="outcome-what">Pure stream cipher. Reuse collapses to <code>C₁ ⊕ C₂ = P₁ ⊕ P₂</code> — keystream reuse, exactly the <a href="#reveal">XOR reveal</a>. There is no integrity tag here to lose.</p>
               <div class="reuse-row">
-                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-ctr" /><span class="slider" aria-hidden="true"></span></label>
+                <span class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-ctr" /><span class="slider" aria-hidden="true"></span></span>
                 <label for="reuse-ctr" class="switch-text">Reuse the nonce</label>
                 <button type="button" class="secondary run-btn" id="run-ctr">Run</button>
               </div>
@@ -276,7 +276,7 @@
               <h3 id="gcm-h">AES-GCM <span class="chip-spec">SP 800-38D</span></h3>
               <p class="outcome-what">Keystream reuse <em>plus</em> a worse break: two ciphertexts under one nonce let Joux's "forbidden attack" recover the <strong>GHASH authentication subkey H</strong>, enabling tag forgery. This is <strong>authentication-key recovery — not AES key recovery.</strong></p>
               <div class="reuse-row">
-                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-gcm" /><span class="slider" aria-hidden="true"></span></label>
+                <span class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-gcm" /><span class="slider" aria-hidden="true"></span></span>
                 <label for="reuse-gcm" class="switch-text">Reuse the nonce</label>
                 <button type="button" class="secondary run-btn" id="run-gcm">Run</button>
               </div>
@@ -288,7 +288,7 @@
               <h3 id="cc-h">ChaCha20-Poly1305 <span class="chip-spec">RFC 8439</span></h3>
               <p class="outcome-what">Keystream reuse <em>plus</em> recovery of the per-message <strong>Poly1305 one-time key (r, s)</strong>, which is fixed by (key, nonce) — enabling forgery for that nonce. The <strong>ChaCha20 key itself is not recovered.</strong></p>
               <div class="reuse-row">
-                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-chacha" /><span class="slider" aria-hidden="true"></span></label>
+                <span class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-chacha" /><span class="slider" aria-hidden="true"></span></span>
                 <label for="reuse-chacha" class="switch-text">Reuse the nonce</label>
                 <button type="button" class="secondary run-btn" id="run-chacha">Run</button>
               </div>
@@ -300,7 +300,7 @@
               <h3 id="cbc-h">AES-CBC <span class="chip-spec">SP 800-38A</span></h3>
               <p class="outcome-what">A <em>weaker</em> failure. IV reuse makes CBC deterministic on shared prefixes: two messages with the same leading blocks produce the same leading ciphertext blocks. It leaks <strong>prefix equality</strong> — not the keystream, not the plaintext.</p>
               <div class="reuse-row">
-                <label class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-cbc" /><span class="slider" aria-hidden="true"></span></label>
+                <span class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-cbc" /><span class="slider" aria-hidden="true"></span></span>
                 <label for="reuse-cbc" class="switch-text">Reuse the IV</label>
                 <button type="button" class="secondary run-btn" id="run-cbc">Run</button>
               </div>

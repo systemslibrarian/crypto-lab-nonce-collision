@@ -1,69 +1,44 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import {
+  NARROW,
+  boot,
+  driveAllStates,
+  expectBaselineNotStale,
+  reportCollected,
+  watchPageErrors,
+} from './gate';
 
 /**
- * WCAG 2.1 A/AA gate. Scans the production build (via `vite preview`) in both
- * themes. Before scanning we drive the demo into its most colour-loaded states
- * — every reuse toggle ON so the ALARM / LEAK verdict panels render, the
- * crib-drag panel revealed, and the cancellation animations run to completion —
- * so the dynamic result regions are actually audited, not just the static shell.
+ * The WCAG 2.1 A/AA gate: {dark, light} × {1280 desktop, 380 phone}.
+ *
+ * Four configurations rather than two, because the gate this replaces ran only
+ * at the project's default 1280x720 and so never tested WCAG 1.4.10 (Reflow) at
+ * all — on a page carrying two `min-width: 640px` tables. See `gate.ts` for
+ * what the previous spec actually did and why each of its five shortcuts turned
+ * a failure into a pass.
+ *
+ * Every configuration runs the SAME drive: the crib-drag exhibit with a crib
+ * that fits and one that does not, all four constructions with a fresh nonce
+ * AND with a reused one, both "run all four" buttons, both algebra disclosures
+ * and both cancellations, all three nonce widths, both ends of both sliders,
+ * and the hero call to action — scanning after every one of them.
  */
+const CONFIGS = [
+  { theme: 'dark' as const, width: 1280, height: 800, label: 'dark / 1280px' },
+  { theme: 'light' as const, width: 1280, height: 800, label: 'light / 1280px' },
+  { theme: 'dark' as const, ...NARROW, label: 'dark / 380px' },
+  { theme: 'light' as const, ...NARROW, label: 'light / 380px' },
+];
 
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-
-async function prepare(page: Page): Promise<void> {
-  await page.addStyleTag({
-    content: '*, *::before, *::after { animation: none !important; transition: none !important; }',
+for (const cfg of CONFIGS) {
+  test(`WCAG 2.1 A/AA — ${cfg.label}`, async ({ page }) => {
+    test.setTimeout(900_000);
+    const errors = watchPageErrors(page);
+    await page.setViewportSize({ width: cfg.width, height: cfg.height });
+    await boot(page, cfg.theme);
+    await driveAllStates(page, cfg.label);
+    expectBaselineNotStale();
+    expect(errors, 'no page or console errors during the drive').toEqual([]);
+    reportCollected();
   });
-
-  // Reveal collapsed / injected content.
-  await page.evaluate(() => {
-    document.querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = true));
-    document.querySelectorAll<HTMLElement>('[hidden]').forEach((el) => el.removeAttribute('hidden'));
-  });
-
-  // Reveal the crib-drag panel.
-  await page.getByRole('button', { name: /encrypt both under one key/i }).click().catch(() => {});
-
-  // Turn on every reuse toggle (visually-hidden inputs; set via DOM) so the
-  // broken / leak verdict panels render, then run every construction card.
-  await page.evaluate(() => {
-    document.querySelectorAll<HTMLInputElement>('.reuse-toggle').forEach((cb) => (cb.checked = true));
-  });
-  for (const b of await page.locator('.run-btn').all()) {
-    await b.click().catch(() => {});
-  }
-  // Run both cancellations so the computed byte panels are on the page to scan
-  // (they are the algebra section's real output, not decoration).
-  for (const b of await page.locator('.cancel-btn').all()) {
-    await b.click().catch(() => {});
-  }
-  await expect(page.locator('#cancel-gcm-run .cr-row').first()).toBeVisible();
-  await expect(page.locator('#cancel-poly-run .cr-row').first()).toBeVisible();
-  await page.waitForTimeout(500);
 }
-
-async function scan(page: Page): Promise<void> {
-  const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  expect(
-    violations.map((v) => ({
-      id: v.id,
-      impact: v.impact,
-      nodes: v.nodes.map((n) => n.target.join(' ')).slice(0, 5),
-    })),
-  ).toEqual([]);
-}
-
-test('no WCAG A/AA violations — dark theme', async ({ page }) => {
-  await page.goto('.');
-  await prepare(page);
-  await scan(page);
-});
-
-test('no WCAG A/AA violations — light theme', async ({ page }) => {
-  await page.goto('.');
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await prepare(page);
-  await scan(page);
-});

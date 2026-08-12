@@ -7,6 +7,15 @@
 /* --accent is the brand red, required on :root for the shared top bar. */
 :root {
   --accent: #b91c1c;
+  /* --accent-strong is the same red where it has to CARRY something: a
+     control's fill, its edge, a focus ring, a slider thumb. The brand red is a
+     DARK red, which this palette already knew for text (--accent-text is lifted
+     to #f87171 in dark) and never applied to non-text. Against the dark
+     surfaces #b91c1c measures 2.36:1 to 2.92:1 — under the 3:1 SC 1.4.11 asks —
+     so the dark theme lifts it below. --accent itself is deliberately left
+     alone, because the always-dark shared top bar mixes it into its own ink and
+     that block is byte-identical across the fleet. */
+  --accent-strong: #b91c1c;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', ui-monospace, Consolas, monospace;
 }
@@ -23,6 +32,11 @@
   --code-bg: #1e2029;
   /* Red is dark; on-surface accent text needs a lifted variant for AA. */
   --accent-text: #f87171;
+  /* 3.21:1 on --surface-alt (the tightest surface a control sits on), 3.41:1 on
+     --code-bg, 3.57:1 on --surface, 3.97:1 on --background — and white still
+     reads 4.76:1 on it, so a filled primary button keeps its label. #b91c1c
+     cleared none of the four. */
+  --accent-strong: #d93030;
   --on-accent: #ffffff;
   --safe: #22c55e;
   --warn: #f59e0b;
@@ -90,13 +104,13 @@ body {
 }
 
 #main:focus { outline: none; }
-#main:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+#main:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; }
 
 /* Base element rules scoped to #app so they never fight the always-dark top bar. */
 #app p { margin: 0.6rem 0; }
 #app a { color: var(--accent-text); text-decoration: underline; }
 #app a:hover { text-decoration: none; }
-#app :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#app :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 #app code {
   font-family: var(--mono); font-size: 0.9em;
   background-color: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px;
@@ -119,7 +133,7 @@ nav[aria-label='Page sections'] a {
   background-color: var(--surface-alt); color: var(--text); text-decoration: none; border: 1px solid var(--border);
 }
 nav[aria-label='Page sections'] a:hover,
-nav[aria-label='Page sections'] a:focus-visible { border-color: var(--accent); color: var(--accent-text); }
+nav[aria-label='Page sections'] a:focus-visible { border-color: var(--accent-strong); color: var(--accent-text); }
 
 /* --- Sections / headings --- */
 section { margin: 2.5rem 0; }
@@ -149,7 +163,7 @@ textarea, input[type='text'] {
   width: 100%; font-family: var(--mono); font-size: 0.9rem; padding: 0.55rem 0.7rem;
   background-color: var(--surface-alt); color: var(--text); border: 1px solid var(--control-border); border-radius: 8px; resize: vertical;
 }
-textarea:focus-visible, input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+textarea:focus-visible, input[type='text']:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; border-color: var(--accent-strong); }
 .button-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
 
 button {
@@ -158,11 +172,11 @@ button {
   /* WCAG touch target: at least 44x44 CSS px */
   min-height: 44px; min-width: 44px;
 }
-button:hover { border-color: var(--accent); }
+button:hover { border-color: var(--accent-strong); }
 button:disabled { opacity: 0.6; cursor: default; }
-button.primary { background-color: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+button.primary { background-color: var(--accent-strong); color: var(--on-accent); border-color: var(--accent-strong); }
 button.primary:hover { filter: brightness(1.08); }
-button.secondary { background-color: transparent; border-color: var(--accent); color: var(--accent-text); }
+button.secondary { background-color: transparent; border-color: var(--accent-strong); color: var(--accent-text); }
 
 /* --- Byte lanes --- */
 .lane-block { margin: 0.9rem 0; }
@@ -172,18 +186,26 @@ button.secondary { background-color: transparent; border-color: var(--accent); c
   background-color: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.7rem;
   max-height: 9rem; overflow: auto;
 }
-.byte-lane:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.byte-lane:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .byte { display: inline-block; padding: 0 0.18rem; border-radius: 3px; }
 .reveal-lane .byte.printable { background-color: color-mix(in oklab, var(--safe) 26%, transparent); color: var(--text); font-weight: 700; }
 .reveal-lane .byte.nonprint { color: var(--text-muted); }
-.reveal-text { font-family: var(--mono); font-size: 0.9rem; margin: 0.5rem 0 0; color: var(--text); }
+/* `overflow-wrap: anywhere`, NOT `break-word`. This paragraph prints the
+   readable rendering of raw bytes, which is one unbroken run of mojibake with no
+   space in it — and it sits inside `.outcome-grid`, a grid whose bare `1fr`
+   track takes its AUTOMATIC MINIMUM from the min-content of its item. That made
+   one paragraph size the whole page: at 380px the CTR card measured 405px and
+   the document scrolled sideways (WCAG 1.4.10). `break-word` would not have
+   fixed it — it wraps but does NOT reduce min-content, so the track floor would
+   not have moved. `anywhere` does both. */
+.reveal-text { font-family: var(--mono); font-size: 0.9rem; margin: 0.5rem 0 0; color: var(--text); overflow-wrap: anywhere; }
 .reveal-text.reveal-hit { color: var(--safe-text); font-weight: 700; }
 
 .cribdrag-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
 @media (max-width: 640px) { .cribdrag-controls { grid-template-columns: 1fr; } }
 .offset-val { font-family: var(--mono); font-size: 0.82rem; color: var(--text-muted); }
-input[type='range'] { width: 100%; accent-color: var(--accent); }
-input[type='range']:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+input[type='range'] { width: 100%; accent-color: var(--accent-strong); }
+input[type='range']:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
 
 /* --- Chips / inline markers (icon or shape + text + colour) --- */
 .chip, .chip-spec {
@@ -218,18 +240,27 @@ input[type='range']:focus-visible { outline: 2px solid var(--accent); outline-of
 
 /* switch toggle: position + colour convey state (not colour alone) */
 .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: 0 0 auto; }
-.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+/* `z-index: 1` is load-bearing. The switch used to be wrapped in a <label>, so a
+   click landing on `.slider` — which paints over the input — reached the input
+   through the label. That wrapper was a SECOND label on an input that already
+   has an explicit `<label for>`, which axe reports as `form-field-multiple-labels`
+   (in `incomplete`, never in `violations`), so it became a <span>. With the
+   label gone the input has to receive the pointer itself, and it only does that
+   above the track. */
+.switch input { position: absolute; z-index: 1; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .switch .slider {
   position: absolute; inset: 0; border-radius: 999px; background-color: var(--surface-alt);
-  border: 1px solid var(--border); transition: background-color 0.15s;
+  /* The track IS this control's boundary — the <input> over it is opacity 0 —
+     so it takes --control-border for the same reason .chip-toggle does. */
+  border: 1px solid var(--control-border); transition: background-color 0.15s;
 }
 .switch .slider::before {
   content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
   border-radius: 50%; background-color: var(--text-muted); transition: transform 0.15s, background-color 0.15s;
 }
-.switch input:checked + .slider { background-color: color-mix(in oklab, var(--accent) 35%, var(--surface-alt)); border-color: var(--accent); }
+.switch input:checked + .slider { background-color: color-mix(in oklab, var(--accent) 35%, var(--surface-alt)); border-color: var(--accent-strong); }
 .switch input:checked + .slider::before { transform: translateX(20px); background-color: var(--accent-text); }
-.switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:focus-visible + .slider { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 
 .result-slot:empty { display: none; }
 
@@ -275,7 +306,7 @@ input[type='range']:focus-visible { outline: 2px solid var(--accent); outline-of
 
 /* --- Tables --- */
 .table-scroll { overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
-.table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.table-scroll:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .consequence-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 640px; }
 .consequence-table th, .consequence-table td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 .consequence-table thead th { background-color: var(--surface-alt); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); position: sticky; top: 0; }
@@ -328,12 +359,16 @@ details.card[open] > summary::before { content: '▾ '; }
 .nonce-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin: 1rem 0; }
 @media (max-width: 640px) { .nonce-controls { grid-template-columns: 1fr; } }
 .radio-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* --control-border, not --border: this is a control's edge, and SC 1.4.11 holds
+   it to 3:1 against the card outside it. On --border it measured 1.32:1 dark and
+   1.47:1 light — the three nonce-width buttons had no perceivable boundary in
+   either theme. */
 .chip-toggle {
   font-size: 0.82rem; font-weight: 600; padding: 0.4rem 0.75rem; border-radius: 999px;
-  background-color: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+  background-color: var(--surface-alt); border: 1px solid var(--control-border); color: var(--text);
 }
 .chip-toggle::before { content: '○ '; color: var(--text-muted); }
-.chip-toggle.is-active { border-color: var(--accent); color: var(--accent-text); background-color: color-mix(in oklab, var(--accent) 12%, var(--surface)); }
+.chip-toggle.is-active { border-color: var(--accent-strong); color: var(--accent-text); background-color: color-mix(in oklab, var(--accent) 12%, var(--surface)); }
 .chip-toggle.is-active::before { content: '● '; color: var(--accent-text); }
 .nonce-readout { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.6rem; }
 .readout-cell { flex: 1 1 12rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.9rem; background-color: var(--surface-alt); }
@@ -357,7 +392,7 @@ details.card[open] > summary::before { content: '▾ '; }
 /* --- Orchestration + scoreboard --- */
 .orchestrate { border-left: 4px solid var(--accent); }
 .scoreboard-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; margin-top: 0.9rem; }
-.scoreboard-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scoreboard-wrap:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .scoreboard-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 640px; }
 .scoreboard-table th, .scoreboard-table td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .scoreboard-table thead th { background-color: var(--surface-alt); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
