@@ -496,9 +496,16 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
 
       const cs = styleOf(el);
       const fillOwn = ownPaint(cs, r, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
-      const bw = ['Top', 'Right', 'Bottom', 'Left'].map((s) =>
-        parseFloat(cs.getPropertyValue(`border-${s.toLowerCase()}-width`) || '0')
-      );
+      // PER SIDE, not `border-top` for all four. The earlier fleet form of this
+      // read `border-*-width` on every side but then tested `border-top-style`
+      // and measured `border-top-color` alone, so it silently judged the WRONG
+      // EDGE whenever a control is delineated by one side only — elsewhere in
+      // this fleet that reported 1.12:1 for a selected tab whose entire
+      // boundary was a 3px `border-bottom` underline, the ARIA tab pattern's
+      // normal delineator. Every painted side is walked now and the best one
+      // wins, so which edge carries the boundary stays an implementation
+      // detail rather than a load-bearing assumption.
+      //
       // A border only delineates if it PAINTS. A `border: … transparent`
       // declared purely to reserve the pixel some other state fills in draws
       // nothing at all, and the control is then identified by its text — the
@@ -506,8 +513,14 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       // exempts. Counting a zero-alpha border as a boundary would instead
       // report every such control at a fixed 1.00:1 against a surround it is
       // not trying to stand out from, which is noise rather than a finding.
-      const borderPaints = (resolve(cs.borderTopColor)?.a ?? 0) > 0;
-      const hasBorder = bw.some((w) => w > 0) && cs.borderTopStyle !== 'none' && borderPaints;
+      const SIDES = ['top', 'right', 'bottom', 'left'] as const;
+      const paintedSides = SIDES.filter((side) => {
+        if (parseFloat(cs.getPropertyValue(`border-${side}-width`) || '0') <= 0) return false;
+        if (cs.getPropertyValue(`border-${side}-style`) === 'none') return false;
+        const c = resolve(cs.getPropertyValue(`border-${side}-color`));
+        return !!c && c.a > 0;
+      });
+      const hasBorder = paintedSides.length > 0;
       const outlineW = parseFloat(cs.outlineWidth || '0');
       const hasOutline =
         outlineW > 0 && cs.outlineStyle !== 'none' && (resolve(cs.outlineColor)?.a ?? 0) > 0;
@@ -540,8 +553,8 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       let best = fillRatio;
       let how = `fill ${fillRatio.toFixed(2)}:1 vs surround`;
 
-      if (hasBorder) {
-        const bc = resolve(cs.borderTopColor) ?? TRANSPARENT;
+      for (const side of paintedSides) {
+        const bc = resolve(cs.getPropertyValue(`border-${side}-color`)) ?? TRANSPARENT;
         // Over the element's OWN FILL, not the surround: `background-clip`
         // defaults to `border-box`, so the background really is painted
         // underneath the border. It matters wherever one translucent edge token
@@ -553,7 +566,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
         const borderRatio = ratio(border, surround);
         if (borderRatio > best) {
           best = borderRatio;
-          how = `border ${borderRatio.toFixed(2)}:1 vs surround`;
+          how = `border-${side} ${borderRatio.toFixed(2)}:1 vs surround`;
         }
       }
       if (hasOutline) {
