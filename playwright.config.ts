@@ -24,5 +24,11 @@ export default defineConfig({
     baseURL: 'http://localhost:4226/crypto-lab-nonce-collision/',
     colorScheme: 'dark',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /* All three engines: the fresh-nonce branch below asserts that WebCrypto's own
+     verifier accepts an honest tag, and "WebCrypto does X" is an engine claim. */
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
 });

@@ -194,15 +194,17 @@ function renderScoreboard(): void {
   $('scoreboard').innerHTML = html;
 }
 
-function updateScore(c: Constr, isReused: boolean): void {
-  runState[c] = isReused ? 'broken' : 'safe';
+/* The scoreboard records what a run MEASURED. It used to be set from the toggle before
+   the run started, which meant a card could report SAFE while its own verification had
+   just failed — the reuse switch was answering a question only the computation can. */
+function updateScore(c: Constr, level: 'safe' | 'broken'): void {
+  runState[c] = level;
   renderScoreboard();
 }
 
 async function runCtr(): Promise<void> {
   const slot = $('out-ctr');
   const isReused = reused('reuse-ctr');
-  updateScore('ctr', isReused);
   const key = await importCtrKey(randomBytes(32));
   const p1 = textToBytes(SCENARIO_P1);
   const p2 = textToBytes(SCENARIO_P2);
@@ -211,6 +213,7 @@ async function runCtr(): Promise<void> {
     const c1 = await aesCtrEncrypt(key, randomBytes(16), p1);
     const c2 = await aesCtrEncrypt(key, randomBytes(16), p2);
     const combo = combineCiphertexts(c1, c2);
+    updateScore('ctr', 'safe');
     renderResult(slot, {
       cryptoLabel: 'AES-CTR decrypt round-trips normally.',
       cryptoValue: 'Decryption: OK',
@@ -229,6 +232,7 @@ async function runCtr(): Promise<void> {
   const combo = combineCiphertexts(c1, c2);
   // Prove the pad is gone: XOR the known P₁ back in and P₂ appears verbatim.
   const p2Recovered = xorBytes(combo, p1);
+  updateScore('ctr', 'broken');
   renderResult(slot, {
     cryptoLabel: 'AES-CTR still decrypts fine — there is no integrity check to fail.',
     cryptoValue: 'Decryption: OK',
@@ -243,26 +247,33 @@ async function runCtr(): Promise<void> {
 async function runGcm(): Promise<void> {
   const slot = $('out-gcm');
   const isReused = reused('reuse-gcm');
-  updateScore('gcm', isReused);
   const rawKey = randomBytes(32);
   const key = await importGcmKey(rawKey);
 
   if (!isReused) {
-    const { ciphertext, tag } = await aesGcmEncrypt(key, randomBytes(12), textToBytes(SCENARIO_P1));
-    const ok = (await aesGcmVerify(key, randomBytes(12), ciphertext, tag)) !== null;
+    /* One nonce, used to encrypt and to verify. This branch had drawn a SECOND random
+       nonce for the verify, so the honest tag never verified and the card printed
+       "(mismatched nonce) REJECT" — under a heading that said SAFE. The exhibit's
+       point is that a unique nonce verifies; it has to actually verify. */
+    const nonce = randomBytes(12);
+    const { ciphertext, tag } = await aesGcmEncrypt(key, nonce, textToBytes(SCENARIO_P1));
+    const ok = (await aesGcmVerify(key, nonce, ciphertext, tag)) !== null;
+    updateScore('gcm', ok ? 'safe' : 'broken');
     renderResult(slot, {
       cryptoLabel: 'Honest tag under a unique nonce.',
-      cryptoValue: ok ? 'WebCrypto verify: VALID' : 'WebCrypto verify: (mismatched nonce) REJECT',
-      level: 'safe',
-      verdictTitle: 'SAFE — unique nonce',
-      verdictDetail:
-        'With the nonce fresh, the per-nonce mask never repeats, so H stays hidden and no tag can be forged.',
+      cryptoValue: ok ? 'WebCrypto verify: VALID' : 'WebCrypto verify: REJECT',
+      level: ok ? 'safe' : 'broken',
+      verdictTitle: ok ? 'SAFE — unique nonce' : 'UNEXPECTED — an honest tag did not verify',
+      verdictDetail: ok
+        ? 'With the nonce fresh, the per-nonce mask never repeats, so H stays hidden and no tag can be forged.'
+        : 'This run encrypted and verified under one fresh nonce and the tag still failed. That is a fault in this page or its engine, not a property of GCM.',
     });
     return;
   }
 
   const res = await runForbiddenAttack(rawKey, randomBytes(12));
   const forged = res.forgedDecrypted ? toReadable(res.forgedDecrypted) : '(rejected)';
+  updateScore('gcm', 'broken');
   renderResult(slot, {
     cryptoLabel: 'WebCrypto AES-GCM decrypt returned the attacker’s plaintext for a tag the key never produced.',
     cryptoValue: res.forgeryAccepted ? 'WebCrypto verify(forged): VALID' : 'WebCrypto verify(forged): REJECT',
@@ -283,19 +294,22 @@ async function runGcm(): Promise<void> {
 function runChacha(): void {
   const slot = $('out-chacha');
   const isReused = reused('reuse-chacha');
-  updateScore('chacha', isReused);
   const key = randomBytes(32);
 
   if (!isReused) {
-    const { ciphertext, tag } = chachaPolyEncrypt(key, randomBytes(12), new Uint8Array(0), textToBytes(SCENARIO_P1));
-    const ok = chachaPolyVerify(key, randomBytes(12), new Uint8Array(0), ciphertext, tag) !== null;
+    /* One nonce for encrypt and verify, for the reason given in runGcm. */
+    const nonce = randomBytes(12);
+    const { ciphertext, tag } = chachaPolyEncrypt(key, nonce, new Uint8Array(0), textToBytes(SCENARIO_P1));
+    const ok = chachaPolyVerify(key, nonce, new Uint8Array(0), ciphertext, tag) !== null;
+    updateScore('chacha', ok ? 'safe' : 'broken');
     renderResult(slot, {
       cryptoLabel: 'Honest tag under a unique nonce.',
-      cryptoValue: ok ? 'Poly1305 verify: VALID' : 'Poly1305 verify: (mismatched nonce) REJECT',
-      level: 'safe',
-      verdictTitle: 'SAFE — unique nonce',
-      verdictDetail:
-        'A fresh nonce gives a fresh Poly1305 one-time key (r, s); with only one message under it, nothing leaks.',
+      cryptoValue: ok ? 'Poly1305 verify: VALID' : 'Poly1305 verify: REJECT',
+      level: ok ? 'safe' : 'broken',
+      verdictTitle: ok ? 'SAFE — unique nonce' : 'UNEXPECTED — an honest tag did not verify',
+      verdictDetail: ok
+        ? 'A fresh nonce gives a fresh Poly1305 one-time key (r, s); with only one message under it, nothing leaks.'
+        : 'This run encrypted and verified under one fresh nonce and the tag still failed. That is a fault in this page, not a property of ChaCha20-Poly1305.',
     });
     return;
   }
@@ -306,6 +320,7 @@ function runChacha(): void {
   const c1 = chachaPolyEncrypt(key, nonce, new Uint8Array(0), textToBytes(SCENARIO_P1)).ciphertext;
   const c2 = chachaPolyEncrypt(key, nonce, new Uint8Array(0), textToBytes(SCENARIO_P2)).ciphertext;
   const combo = combineCiphertexts(c1, c2);
+  updateScore('chacha', 'broken');
   renderResult(slot, {
     cryptoLabel: 'The real Poly1305 verifier accepts a tag produced from the recovered one-time key.',
     cryptoValue: res.forgeryAccepted ? 'Poly1305 verify(forged): VALID' : 'Poly1305 verify(forged): REJECT',
@@ -326,7 +341,6 @@ function runChacha(): void {
 async function runCbc(): Promise<void> {
   const slot = $('out-cbc');
   const isReused = reused('reuse-cbc');
-  updateScore('cbc', isReused);
   const key = await importCbcKey(randomBytes(32));
   const p1 = textToBytes(CBC_P1);
   const p2 = textToBytes(CBC_P2);
@@ -334,6 +348,7 @@ async function runCbc(): Promise<void> {
   if (!isReused) {
     const c1 = await aesCbcEncrypt(key, randomBytes(16), p1);
     const c2 = await aesCbcEncrypt(key, randomBytes(16), p2);
+    updateScore('cbc', 'safe');
     renderResult(slot, {
       cryptoLabel: 'AES-CBC decrypt round-trips normally.',
       cryptoValue: 'Decryption: OK',
@@ -349,6 +364,7 @@ async function runCbc(): Promise<void> {
   const c2 = await aesCbcEncrypt(key, iv, p2);
   const shared = sharedLeadingBlocks(c1, c2);
   const b1 = toBlocks(c1);
+  updateScore('cbc', 'broken');
   renderResult(slot, {
     cryptoLabel: 'AES-CBC decrypt round-trips normally — this is a leak, not a decryption break.',
     cryptoValue: 'Decryption: OK',
