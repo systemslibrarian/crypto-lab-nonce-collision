@@ -28,7 +28,11 @@ export default defineConfig({
      verifier accepts an honest tag, and "WebCrypto does X" is an engine claim. */
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    /* firefox and webkit run the functional specs only. The axe sweep is a far
+       heavier check and belongs in one engine; tripling it triples the gate and
+       buys load-dependent failures rather than coverage. See the same note in
+       crypto-lab-aes-modes, where that cost showed up as a false red. */
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /a11y\.spec\.ts/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /a11y\.spec\.ts/ },
   ],
 });
