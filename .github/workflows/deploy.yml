@@ -31,7 +31,10 @@ jobs:
       - name: Build
         run: npm run build
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        # Three engines because the regression tests below assert what a browser's own
+        # WebCrypto and layout do, and "works in every engine" is a claim this repo
+        # publishes to instructors. One apt step, not three.
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Accessibility gate (axe-core, WCAG A/AA, both themes)
         run: npm run test:a11y
       - uses: actions/upload-pages-artifact@v5
