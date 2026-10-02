@@ -12,6 +12,34 @@ import { expect, test, type Page } from '@playwright/test';
 
 const HEX32 = /^[0-9a-f]{32}$/;
 
+/* Click a run button and WAIT FOR THE RUN TO LAND, rather than reading whatever is
+ * in the panel at the moment the click returns.
+ *
+ * `runGcmCancellation` and its Poly1305 twin both `await runForbiddenAttack(...)`
+ * -- real WebCrypto -- BEFORE they rewrite the panel's innerHTML. So between the
+ * click and the repaint the panel still shows the PREVIOUS run's bytes, and a read
+ * taken there compares a run with itself. The two re-running tests did exactly
+ * that: click, read, click, read. They pass on a fast machine because the read
+ * happens to land after the await, and the WebKit job in CI is where that stopped
+ * being true.
+ *
+ * Polling on "the value is no longer the one I had" is the completion signal that
+ * is actually available here: the panel is rewritten in one assignment, so the new
+ * tag appearing IS the new run having finished. */
+async function clickAndAwaitNewValue(
+  page: Page,
+  button: string,
+  panel: string,
+  label: string,
+  previous: string,
+): Promise<string> {
+  await page.locator(button).click();
+  await expect
+    .poll(() => rowValue(page, panel, label), { timeout: 15_000 })
+    .not.toBe(previous);
+  return rowValue(page, panel, label);
+}
+
 async function openAlgebra(page: Page): Promise<void> {
   await page.goto('.');
   await page.evaluate(() => {
@@ -71,12 +99,16 @@ test('AES-GCM: re-running produces different bytes — the panel is computed, no
 }) => {
   await openAlgebra(page);
   await page.locator('#cancel-gcm-btn').click();
+  await expect.poll(() => rowValue(page, 'cancel-gcm-run', 'tag₁')).toMatch(HEX32);
   const first = await rowValue(page, 'cancel-gcm-run', 'tag₁');
-  await page.locator('#cancel-gcm-btn').click();
-  const second = await rowValue(page, 'cancel-gcm-run', 'tag₁');
+  const second = await clickAndAwaitNewValue(
+    page, '#cancel-gcm-btn', 'cancel-gcm-run', 'tag₁', first,
+  );
   expect(first).toMatch(HEX32);
+  expect(second).toMatch(HEX32);
   expect(second).not.toBe(first);
   await expect(page.locator('#cancel-gcm-run .cancel-check.cc-bad')).toHaveCount(0);
+  await expect(page.locator('#cancel-gcm-run .cancel-check.cc-ok')).toHaveCount(3);
 });
 
 test('Poly1305: the panel prints this run’s numbers and the identity holds on them', async ({
@@ -112,10 +144,13 @@ test('Poly1305: the panel prints this run’s numbers and the identity holds on 
 test('Poly1305: re-running produces different numbers', async ({ page }) => {
   await openAlgebra(page);
   await page.locator('#cancel-poly-btn').click();
+  await expect.poll(() => rowValue(page, 'cancel-poly-run', 'tag₁')).toMatch(HEX32);
   const first = await rowValue(page, 'cancel-poly-run', 'tag₁');
-  await page.locator('#cancel-poly-btn').click();
-  const second = await rowValue(page, 'cancel-poly-run', 'tag₁');
+  const second = await clickAndAwaitNewValue(
+    page, '#cancel-poly-btn', 'cancel-poly-run', 'tag₁', first,
+  );
   expect(first).toMatch(HEX32);
+  expect(second).toMatch(HEX32);
   expect(second).not.toBe(first);
   await expect(page.locator('#cancel-poly-run .cancel-check.cc-bad')).toHaveCount(0);
 });
