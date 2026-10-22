@@ -1,5 +1,3 @@
-import AxeBuilder from '@axe-core/playwright';
-import type { Result } from 'axe-core';
 import { expect, type Page } from '@playwright/test';
 import { auditContrast, formatContrastFailures } from './contrast';
 import { auditNonText } from './nontext';
@@ -280,8 +278,8 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
   for (const sel of ['#cd-panel', '#cancel-gcm-run', '#cancel-poly-run']) {
     await expect(page.locator(sel)).toBeHidden();
   }
-  await expect(page.locator('.result-slot')).toHaveCount(4);
-  for (const sel of ['#out-ctr', '#out-gcm', '#out-chacha', '#out-cbc']) {
+  await expect(page.locator('.result-slot')).toHaveCount(5);
+  for (const sel of ['#out-ctr', '#out-gcm', '#out-chacha', '#out-cbc', '#out-cbc-predictable']) {
     await expect(page.locator(sel)).toBeEmpty();
   }
 
@@ -724,6 +722,13 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
   await expect(page.locator('#out-cbc .verdict-leak')).toBeVisible();
   await expect(page.locator('#out-cbc .bc-row.bc-match').first()).toBeVisible();
   await scanAt('CBC prefix leak — identical leading blocks highlighted');
+
+  // The separate chosen-plaintext exhibit uses distinct predictable IVs and
+  // draws its random control IV only after the second plaintext is committed.
+  await page.click('#run-cbc-predictable');
+  await expect(page.locator('#out-cbc-predictable')).toContainText('FIRST BLOCKS MATCH');
+  await expect(page.locator('#out-cbc-predictable')).toContainText('NO FIRST-BLOCK MATCH');
+  await scanAt('CBC distinct predictable IVs versus a committed random-IV control');
 
   // ── The two orchestration buttons, which rewrite all four cards at once ──
   await page.click('#run-all-fresh');
