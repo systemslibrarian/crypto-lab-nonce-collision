@@ -1,3 +1,5 @@
+import AxeBuilder from '@axe-core/playwright';
+import type { Result } from 'axe-core';
 import { expect, type Page } from '@playwright/test';
 import { auditContrast, formatContrastFailures } from './contrast';
 import { auditNonText } from './nontext';
