@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { createCipheriv } from 'node:crypto';
 import {
   importCtrKey,
   importCbcKey,
   aesCtrEncrypt,
   aesCbcEncrypt,
+  cbcCompensatingBlock,
   sharedLeadingBlocks,
   ghashSubkeyH,
   xorBytes,
@@ -57,6 +59,46 @@ describe('AES-CBC IV reuse leaks shared prefixes (SP 800-38A)', () => {
     const c1 = await aesCbcEncrypt(key, randBytes(16), msg);
     const c2 = await aesCbcEncrypt(key, randBytes(16), msg);
     expect(sharedLeadingBlocks(c1, c2)).toBe(0);
+  });
+});
+
+describe('CBC distinct predictable IVs (SP 800-38A Appendix C)', () => {
+  it('matches the first AES-CBC block only when the second plaintext targets the known next IV', async () => {
+    const rawKey = Uint8Array.from({ length: 32 }, (_, i) => i);
+    const key = await importCbcKey(rawKey);
+    const originalIv = new Uint8Array(16);
+    const predictableIv = new Uint8Array(16);
+    predictableIv[15] = 1;
+    const randomControlIv = new Uint8Array(16);
+    randomControlIv[15] = 2;
+    const original = textToBytes('PAY ALICE $0100!');
+    const chosen = cbcCompensatingBlock(original, originalIv, predictableIv);
+
+    expect(hex(originalIv)).not.toBe(hex(predictableIv));
+    expect(hex(original)).not.toBe(hex(chosen));
+    expect(hex(xorBytes(original, originalIv))).toBe(hex(xorBytes(chosen, predictableIv)));
+
+    const [c1, c2, control] = await Promise.all([
+      aesCbcEncrypt(key, originalIv, original),
+      aesCbcEncrypt(key, predictableIv, chosen),
+      aesCbcEncrypt(key, randomControlIv, chosen),
+    ]);
+    expect(hex(c1.slice(0, 16))).toBe(hex(c2.slice(0, 16)));
+    expect(hex(c1.slice(0, 16))).not.toBe(hex(control.slice(0, 16)));
+
+    // Independent AES-CBC implementation checks the generated WebCrypto blocks.
+    const nodeBlock = (iv: Uint8Array, plaintext: Uint8Array) => {
+      const cipher = createCipheriv('aes-256-cbc', rawKey, iv);
+      return new Uint8Array(Buffer.concat([cipher.update(plaintext), cipher.final()]).subarray(0, 16));
+    };
+    expect(hex(c1.slice(0, 16))).toBe(hex(nodeBlock(originalIv, original)));
+    expect(hex(c2.slice(0, 16))).toBe(hex(nodeBlock(predictableIv, chosen)));
+    expect(hex(control.slice(0, 16))).toBe(hex(nodeBlock(randomControlIv, chosen)));
+  });
+
+  it('rejects invalid block or IV lengths before computing the compensation', () => {
+    expect(() => cbcCompensatingBlock(new Uint8Array(15), new Uint8Array(16), new Uint8Array(16))).toThrow(RangeError);
+    expect(() => cbcCompensatingBlock(new Uint8Array(16), new Uint8Array(16), new Uint8Array(17))).toThrow(RangeError);
   });
 });
 

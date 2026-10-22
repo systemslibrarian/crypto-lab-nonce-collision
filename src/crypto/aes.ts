@@ -104,6 +104,27 @@ export async function aesCbcEncrypt(
   return new Uint8Array(out);
 }
 
+/**
+ * If the attacker knows the next CBC IV before choosing P₂, cancel the IV
+ * difference in the first plaintext block. Both AES inputs then equal
+ * P₁ ⊕ IV₁, even though IV₁ and IV₂ are distinct. This is a chosen-plaintext
+ * demonstration, not an attack on an unknown plaintext or an AES-key recovery.
+ */
+export function cbcCompensatingBlock(
+  firstPlaintextBlock: Uint8Array,
+  firstIv: Uint8Array,
+  nextIv: Uint8Array,
+): Uint8Array {
+  if (firstPlaintextBlock.length !== 16 || firstIv.length !== 16 || nextIv.length !== 16) {
+    throw new RangeError('CBC first block and both IVs must each be 16 bytes');
+  }
+  const second = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    second[i] = firstPlaintextBlock[i] ^ firstIv[i] ^ nextIv[i];
+  }
+  return second;
+}
+
 /** Split a byte string into 16-byte blocks (last block may be short). */
 export function toBlocks(b: Uint8Array): Uint8Array[] {
   const out: Uint8Array[] = [];

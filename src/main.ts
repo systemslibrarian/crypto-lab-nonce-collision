@@ -5,12 +5,14 @@ import {
   importGcmKey,
   aesCtrEncrypt,
   aesCbcEncrypt,
+  cbcCompensatingBlock,
   aesGcmEncrypt,
   aesGcmVerify,
   sharedLeadingBlocks,
   toBlocks,
   runForbiddenAttack,
   randomBytes,
+  bytesEqual,
   textToBytes,
   xorBytes,
 } from './crypto/aes.ts';
@@ -353,8 +355,8 @@ async function runCbc(): Promise<void> {
       cryptoLabel: 'AES-CBC decrypt round-trips normally.',
       cryptoValue: 'Decryption: OK',
       level: 'safe',
-      verdictTitle: 'SAFE — fresh IV',
-      verdictDetail: `A random IV randomises the first block, so even a shared prefix hides. Shared leading ciphertext blocks: <strong>${sharedLeadingBlocks(c1, c2)}</strong>.`,
+      verdictTitle: 'NO PREFIX MATCH — fresh unpredictable IVs',
+      verdictDetail: `In this run the random IVs hide the shared first block from a first-ciphertext-block comparison. Shared leading ciphertext blocks: <strong>${sharedLeadingBlocks(c1, c2)}</strong>. CBC alone still does not authenticate either message.`,
     });
     return;
   }
@@ -373,6 +375,59 @@ async function runCbc(): Promise<void> {
     verdictDetail: `Same key, same IV: the two messages share their first <strong>${shared}</strong> plaintext block${shared === 1 ? '' : 's'}, so their first ${shared} ciphertext block${shared === 1 ? '' : 's'} are byte-identical. That reveals the messages share a prefix — <em>not</em> the keystream, <em>not</em> the plaintext.`,
     extraHTML: blockCompareExtra(b1, toBlocks(c2), shared),
   });
+}
+
+/** An incrementing public counter is distinct from the previous IV but predictable. */
+function nextCounterIv(iv: Uint8Array): Uint8Array {
+  const next = iv.slice();
+  for (let i = next.length - 1; i >= 0; i--) {
+    next[i] = (next[i] + 1) & 0xff;
+    if (next[i] !== 0) break;
+  }
+  return next;
+}
+
+/** Execute both cases with the same AES key and the same committed second block. */
+async function runCbcPredictable(): Promise<void> {
+  const slot = $('out-cbc-predictable');
+  const key = await importCbcKey(randomBytes(32));
+  const firstIv = randomBytes(16);
+  const predictedIv = nextCounterIv(firstIv);
+  const firstBlock = textToBytes('PAY ALICE $0100!'); // exactly one 16-byte first block
+  const committedBlock = cbcCompensatingBlock(firstBlock, firstIv, predictedIv);
+
+  // The second plaintext is fixed before this control IV is drawn. Exclude
+  // accidental equality with either displayed IV so the contrast is exact.
+  let freshIv: Uint8Array;
+  do {
+    freshIv = randomBytes(16);
+  } while (bytesEqual(freshIv, firstIv) || bytesEqual(freshIv, predictedIv));
+
+  const [original, predictable, control] = await Promise.all([
+    aesCbcEncrypt(key, firstIv, firstBlock),
+    aesCbcEncrypt(key, predictedIv, committedBlock),
+    aesCbcEncrypt(key, freshIv, committedBlock),
+  ]);
+  const predictedMatches = bytesEqual(original.slice(0, 16), predictable.slice(0, 16));
+  const controlMatches = bytesEqual(original.slice(0, 16), control.slice(0, 16));
+
+  slot.innerHTML = `
+    <div class="key-detail" role="group" aria-label="CBC first-block experiment from this run">
+      <p class="precision"><strong>1. Known first encryption:</strong> P₁ = <code>${hex(firstBlock)}</code>; IV₁ = <code>${hex(firstIv)}</code>.</p>
+      <p class="precision"><strong>2. Attacker predicts the next IV:</strong> IV₂ = <code>${hex(predictedIv)}</code> (counter + 1); chooses and commits to P₂ = <code>${hex(committedBlock)}</code>.</p>
+      <p class="precision"><strong>3. Browser draws the control IV after that commitment:</strong> IV₃ = <code>${hex(freshIv)}</code>.</p>
+      <p class="mono-line">C₁[0] = ${hex(original.slice(0, 16))}</p>
+      <p class="mono-line">C₂[0] = ${hex(predictable.slice(0, 16))}</p>
+      <p class="mono-line">C₃[0] = ${hex(control.slice(0, 16))}</p>
+    </div>
+    <div class="verdict verdict-${predictedMatches ? 'leak' : 'broken'}">
+      <span class="v-title">Predictable, distinct IVs: ${predictedMatches ? 'FIRST BLOCKS MATCH' : 'unexpected mismatch'}</span>
+      <p class="v-detail">IV₁ ≠ IV₂ and P₁ ≠ P₂, yet P₁ ⊕ IV₁ = P₂ ⊕ IV₂. WebCrypto's actual first AES-CBC ciphertext blocks ${predictedMatches ? 'match' : 'did not match'}.</p>
+    </div>
+    <div class="verdict verdict-${controlMatches ? 'broken' : 'safe'}">
+      <span class="v-title">Random-IV control: ${controlMatches ? 'unexpected match' : 'NO FIRST-BLOCK MATCH'}</span>
+      <p class="v-detail">The same already-committed P₂ cannot compensate for the newly drawn IV₃. This tests a first-block comparison only; CBC still needs integrity protection separately.</p>
+    </div>`;
 }
 
 function laneExtra(label: string, bytes: Uint8Array, readable: string): string {
@@ -607,6 +662,7 @@ function init(): void {
   $('run-gcm').addEventListener('click', () => void runGcm());
   $('run-chacha').addEventListener('click', () => runChacha());
   $('run-cbc').addEventListener('click', () => void runCbc());
+  $('run-cbc-predictable').addEventListener('click', () => void runCbcPredictable());
   $('run-all-reuse').addEventListener('click', () => void runAll(true));
   $('run-all-fresh').addEventListener('click', () => void runAll(false));
   renderScoreboard();

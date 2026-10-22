@@ -16,7 +16,7 @@
     <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
-      content="Interactive lab showing how reusing one nonce under one key breaks AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC — each failing differently, none gracefully."
+      content="Interactive lab comparing nonce reuse in AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC, with a separate predictable-CBC-IV experiment."
     />
     <link
       rel="icon"
@@ -134,13 +134,13 @@
       <header class="cl-hero">
         <div class="cl-hero-main">
           <h1 class="cl-hero-title">Nonce Collision</h1>
-          <p class="cl-hero-sub">IV/nonce reuse · NIST SP 800-38A/38D · RFC 8439</p>
-          <p class="cl-hero-desc">Encrypt two messages under one key and one nonce across AES-CTR, AES-GCM, ChaCha20-Poly1305, and AES-CBC, then watch each construction break in its own way — recovering plaintext, forging tags, or leaking prefixes against the real primitives.</p>
+          <p class="cl-hero-sub">Mode-specific IV/nonce rules · NIST SP 800-38A/38D · RFC 8439</p>
+          <p class="cl-hero-desc">Reuse a counter block or nonce in AES-CTR, AES-GCM, and ChaCha20-Poly1305; reuse a CBC IV and then try a distinct but predictable one. Compare the different results against real encryption.</p>
           <p class="hero-cta-row"><button type="button" class="primary hero-cta" id="hero-cta">Break a reused nonce now ↓</button></p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
           <span class="cl-hero-why-label">WHY IT MATTERS</span>
-          <p class="cl-hero-why-text">A nonce is public and easy to get wrong — a counter that resets after a VM snapshot, a random draw that repeats. Reuse one and the damage is construction-specific and severe: sometimes the plaintext, sometimes the ability to forge. Never nothing.</p>
+          <p class="cl-hero-why-text">Public IVs and nonces are easy to get wrong. Stream and AEAD modes need unique counters or nonces under a key. CBC needs an unpredictable IV when an attacker can choose plaintext. Here you can see each condition fail.</p>
         </aside>
       </header>
 
@@ -158,8 +158,8 @@
         <section id="intro" aria-labelledby="intro-heading">
           <h2 id="intro-heading">What is a nonce, and why does reuse matter?</h2>
           <div class="card intro-card">
-            <p>A <strong>nonce</strong> — "number used once" — is a per-message value that a cipher mixes in so the same key can safely encrypt many messages. It is <strong>not a secret</strong>: it travels in the clear next to the ciphertext, and nobody checks it for uniqueness. NIST calls it an <strong>initialization vector (IV)</strong>; the idea is identical.</p>
-            <p>The ciphers here lean on <em>one rule</em>: never use the same nonce twice under the same key. Break that rule and the math that made them secure turns against you. What makes this lab worth your time is that the four constructions do <strong>not</strong> fail the same way — and knowing exactly how each one fails is the difference between a shrug and a catastrophe.</p>
+            <p>A <strong>nonce</strong> — "number used once" — and an <strong>initialization vector (IV)</strong> are public inputs used differently by different constructions. They travel with the ciphertext; the encryption interface does not check whether your choice meets the mode's security requirement.</p>
+            <p><strong>Requirements depend on the mode.</strong> AES-CTR must never repeat a counter block under one key; AES-GCM and ChaCha20-Poly1305 require their nonces to be unique under one key. AES-CBC instead needs an IV the attacker cannot predict <em>before choosing the plaintext</em>; using a different but predictable IV each time is insufficient. Reusing a CBC IV has its own prefix leak. The four constructions do not fail the same way.</p>
             <p class="tag-note">No theory required to start. Go to <a href="#reveal">The XOR reveal</a>, reuse a nonce yourself, and drag out a hidden message. Then the rest of the page explains what you just did.</p>
           </div>
           <div class="callout scope-note" role="note">
@@ -228,7 +228,7 @@
         <!-- ============ FOUR OUTCOMES (per-construction consequence) ============ -->
         <section id="outcomes" aria-labelledby="outcomes-heading">
           <h2 id="outcomes-heading">Same mistake, four outcomes</h2>
-          <p class="section-lead">The same slip — one nonce, twice, under one key — lands differently on each construction. For each card below, flip the nonce from unique to <strong>reused</strong>, run it, and read the <strong>two separate indicators</strong>: what the cipher's own function <em>returned</em>, and the <strong>security verdict</strong>. They are not the same thing. A tag can verify as <span class="inline-valid">VALID</span> and still be a forgery — that reads as an <span class="inline-alarm">ALARM</span>, never a success.</p>
+          <p class="section-lead">Reusing a counter block, nonce, or CBC IV under the same key lands differently on each construction. Flip a card from fresh to <strong>reused</strong>, run it, and read <strong>two separate indicators</strong>: what the cipher's own function <em>returned</em>, and the <strong>security verdict</strong>. They are not the same thing. A tag can verify as <span class="inline-valid">VALID</span> and still be a forgery — that reads as an <span class="inline-alarm">ALARM</span>, never a success. The separate CBC exhibit below also tests predictable, distinct IVs.</p>
 
           <div class="verdict-key" role="note" aria-label="How to read the two indicators">
             <p><strong>Two indicators, on purpose.</strong> <span class="chip neutral">Cryptographic result</span> is the raw return value of the primitive (did it decrypt? did the tag check out?). <span class="chip broken">Security verdict</span> tracks whether the system's guarantee still holds. Colour follows the verdict, not the return value — because a forgery the verifier <em>accepts</em> is the most dangerous outcome of all.</p>
@@ -236,8 +236,8 @@
 
           <div class="card orchestrate">
             <div class="button-row">
-              <button type="button" class="primary" id="run-all-reuse">Run all four — one reused nonce</button>
-              <button type="button" class="secondary" id="run-all-fresh">Run all four — fresh nonces</button>
+              <button type="button" class="primary" id="run-all-reuse">Run all four — reused IV/nonce</button>
+              <button type="button" class="secondary" id="run-all-fresh">Run all four — fresh IVs/nonces</button>
             </div>
             <p class="tag-note">One click breaks (or spares) all four at once, then read the running tally below and the per-card detail underneath. This is the whole thesis in one motion: <strong>one mistake, four different failures.</strong></p>
             <div id="scoreboard" class="scoreboard-wrap" role="region" aria-label="What broke — running summary across the four constructions" tabindex="0"></div>
@@ -283,7 +283,7 @@
             <!-- CBC -->
             <article class="card outcome-card" id="card-cbc" aria-labelledby="cbc-h">
               <h3 id="cbc-h">AES-CBC <span class="chip-spec">SP 800-38A</span></h3>
-              <p class="outcome-what">A <em>weaker</em> failure. IV reuse makes CBC deterministic on shared prefixes: two messages with the same leading blocks produce the same leading ciphertext blocks. It leaks <strong>prefix equality</strong> — not the keystream, not the plaintext.</p>
+              <p class="outcome-what">IV reuse makes CBC deterministic on shared prefixes: equal leading plaintext blocks produce equal leading ciphertext blocks. CBC also requires an <strong>unpredictable IV</strong>; the separate experiment below shows why distinct IVs alone do not suffice.</p>
               <div class="reuse-row">
                 <span class="switch"><input type="checkbox" class="reuse-toggle" id="reuse-cbc" /><span class="slider" aria-hidden="true"></span></span>
                 <label for="reuse-cbc" class="switch-text">Reuse the IV</label>
@@ -293,16 +293,24 @@
             </article>
           </div>
 
+          <div class="card" id="cbc-predictable" aria-labelledby="cbc-predictable-heading">
+            <h3 id="cbc-predictable-heading">CBC: different IVs can still leak</h3>
+            <p>Imagine an attacker can choose the next plaintext <em>after learning</em> the next IV. With the same key, choose <code>P₂ = P₁ ⊕ IV₁ ⊕ IV₂</code> for the first block. CBC then feeds AES the same block twice: <code>P₂ ⊕ IV₂ = P₁ ⊕ IV₁</code>. The IVs differ, but their first ciphertext blocks match. This is a controlled chosen-plaintext example; it does not recover the AES key or unknown plaintext.</p>
+            <div class="button-row"><button type="button" class="secondary" id="run-cbc-predictable">Compare predictable and random IVs</button></div>
+            <div class="result-slot" id="out-cbc-predictable" role="status" aria-live="polite"></div>
+            <p class="tag-note">Control: the attacker commits to P₂ <strong>before</strong> the browser draws a fresh random IV, so the compensating choice cannot target that IV. This single run tests the first-block relation, not CBC integrity or an entire application's security. Sources: <a href="https://csrc.nist.gov/pubs/sp/800/38/a/final" target="_blank" rel="noopener noreferrer">NIST SP 800-38A, §5.3 and Appendix C</a>; <a href="https://csrc.nist.gov/pubs/ir/8459/final" target="_blank" rel="noopener noreferrer">NIST IR 8459 (September 2024), §4.1</a>.</p>
+          </div>
+
           <div class="card table-wrapper">
             <h3>The consequence table — precise, and precisely different</h3>
             <div class="table-scroll" role="region" aria-label="Per-construction consequence table" tabindex="0">
               <table class="consequence-table">
-                <caption class="sr-only">What one nonce reuse does to each construction, and which key (if any) is recovered</caption>
+                <caption class="sr-only">What reuse of a counter block, nonce, or CBC IV does in each construction, and which key (if any) is recovered</caption>
                 <thead>
                   <tr>
                     <th scope="col">Construction</th>
                     <th scope="col">Spec</th>
-                    <th scope="col">What nonce reuse breaks</th>
+                    <th scope="col">What IV/nonce reuse breaks</th>
                     <th scope="col">Precise consequence</th>
                     <th scope="col">Enc./AES key recovered?</th>
                   </tr>
@@ -333,7 +341,7 @@
                     <th scope="row">AES-CBC</th>
                     <td>SP 800-38A</td>
                     <td>Confidentiality (partial)</td>
-                    <td>IV reuse leaks equality of first blocks / message prefixes. Deterministic-encryption pattern leakage, not keystream collapse.</td>
+                    <td>IV reuse leaks equality of message prefixes. Even distinct but predictable IVs permit the chosen-first-block equality experiment below; neither is keystream collapse.</td>
                     <td><span class="text-safe">No</span></td>
                   </tr>
                 </tbody>
@@ -426,7 +434,7 @@
 
           <div class="card">
             <h3>The mitigation: make reuse survivable (or impossible)</h3>
-            <p>Two directions. <strong>Guarantee uniqueness</strong> — a single encryptor with a persistent counter, or the discipline SP 800-38D demands. Or use a <strong>misuse-resistant AEAD</strong> that degrades gracefully: <strong>AES-GCM-SIV</strong> (RFC 8452) derives the IV from the plaintext, so reuse leaks only whether two plaintexts were identical — no keystream collapse, no key recovery.</p>
+            <p>For CTR and the AEADs here, <strong>guarantee uniqueness</strong> under each key — a persistent counter can work only if it cannot rewind. For CBC, generate a fresh <strong>unpredictable IV</strong> before each encryption. Another direction for AEADs is a <strong>misuse-resistant</strong> construction: <strong>AES-GCM-SIV</strong> (RFC 8452) derives the IV from the plaintext, so reuse leaks only whether two plaintexts were identical — no keystream collapse, no key recovery.</p>
             <div class="table-scroll" role="region" aria-label="Same nonce reuse: AES-GCM versus AES-GCM-SIV, described" tabindex="0">
               <table class="consequence-table">
                 <caption class="sr-only">The same reused nonce under AES-GCM versus the misuse-resistant AES-GCM-SIV</caption>
@@ -449,8 +457,8 @@
               <li><strong>No AES key recovery, anywhere.</strong> The GCM and ChaCha20-Poly1305 breaks recover <em>authentication</em> keys and enable forgery. The AES/ChaCha encryption key is never learned. The whole lab is built around that distinction.</li>
               <li><strong>Not a misuse-resistant-AEAD build.</strong> AES-GCM-SIV is named as the fix and linked, not implemented here — see <a href="https://systemslibrarian.github.io/crypto-lab-nonce-guard/">Nonce Guard</a>.</li>
               <li><strong>Not an entropy-source lab.</strong> How randomness and counters fail upstream is <strong>Entropy Collapse</strong>, in the <a href="https://crypto-lab.systemslibrarian.dev/">catalog</a>.</li>
-              <li><strong>No CBC padding oracle.</strong> CBC here leaks prefix equality only; the padding-oracle decryption attack is <a href="https://systemslibrarian.github.io/crypto-lab-padding-oracle/">Padding Oracle</a>.</li>
-              <li><strong>What it does not prove:</strong> that these ciphers are weak. Used correctly — a unique nonce per message under each key — every one is secure. This lab proves only that the nonce rule is load-bearing, and that violating it fails in construction-specific, non-graceful ways.</li>
+              <li><strong>No CBC padding oracle.</strong> The CBC exhibits show reused-IV prefix equality and a predictable-IV chosen-plaintext relation; the separate padding-oracle decryption attack is <a href="https://systemslibrarian.github.io/crypto-lab-padding-oracle/">Padding Oracle</a>.</li>
+              <li><strong>What it does not prove:</strong> that these ciphers are weak. They have mode-specific requirements: unique counter blocks/nonces for CTR and the AEADs here; unpredictable IVs for CBC. CBC/CTR also lack built-in authentication. These exhibits demonstrate only the stated failure models, not general security.</li>
             </ul>
           </div>
 
