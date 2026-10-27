@@ -293,7 +293,7 @@
             </article>
           </div>
 
-          <div class="card" id="cbc-predictable" aria-labelledby="cbc-predictable-heading">
+          <div class="card" id="cbc-predictable" role="group" aria-labelledby="cbc-predictable-heading">
             <h3 id="cbc-predictable-heading">CBC: different IVs can still leak</h3>
             <p>Imagine an attacker can choose the next plaintext <em>after learning</em> the next IV. With the same key, choose <code>P₂ = P₁ ⊕ IV₁ ⊕ IV₂</code> for the first block. CBC then feeds AES the same block twice: <code>P₂ ⊕ IV₂ = P₁ ⊕ IV₁</code>. The IVs differ, but their first ciphertext blocks match. This is a controlled chosen-plaintext example; it does not recover the AES key or unknown plaintext.</p>
             <div class="button-row"><button type="button" class="secondary" id="run-cbc-predictable">Compare predictable and random IVs</button></div>
