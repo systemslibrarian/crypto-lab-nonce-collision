@@ -198,7 +198,8 @@ export async function aesGcmVerify(
 /**
  * The GHASH authentication subkey H = E_K(0¹²⁸), computed with WebCrypto alone:
  * AES-CTR with an all-zero counter block encrypts an all-zero block to E_K(0),
- * which by definition (SP 800-38D §6.3) is H. Used only as independent ground
+ * which by definition (SP 800-38D §5.3, and step 1 of Algorithm 4 in §7.1) is
+ * H. §6.3 is the block "multiplication" operation, not this. Used only as ground
  * truth to prove the forbidden-attack recovery landed exactly.
  */
 export async function ghashSubkeyH(rawKey: Uint8Array): Promise<Uint8Array> {

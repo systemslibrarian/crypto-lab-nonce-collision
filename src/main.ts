@@ -286,7 +286,7 @@ async function runGcm(): Promise<void> {
     extraHTML: `
       <div class="key-detail" role="group" aria-label="What was and was not recovered">
         <p class="precision"><span class="pill pill-bad">Recovered</span> GHASH authentication subkey H = E<sub>K</sub>(0¹²⁸) — matches ground truth: <strong>${res.recovered ? 'yes' : 'no'}</strong>.</p>
-        <p class="precision"><span class="pill pill-good">NOT recovered</span> the AES-256 key K. Forgery works only under this reused nonce.</p>
+        <p class="precision"><span class="pill pill-good">NOT recovered</span> the AES-256 key K, so nothing new can be decrypted. But H depends on K alone &mdash; SP 800-38D &sect;7.1 sets H = CIPH<sub>K</sub>(0¹²⁸) before the IV is touched &mdash; so forgery is <strong>not</strong> confined to this nonce: for any captured message under this key, H yields that nonce&rsquo;s mask E<sub>K</sub>(J₀) = T &oplus; GHASH<sub>H</sub>(C), and the message can then be altered and re-tagged.</p>
         <p class="mono-line"><span class="ml-label">recovered H</span> ${hex(res.recoveredH)}</p>
         <p class="mono-line"><span class="ml-label">forged&nbsp;msg</span> “${escapeHTML(forged)}”</p>
       </div>`,
